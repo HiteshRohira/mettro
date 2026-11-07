@@ -1,6 +1,6 @@
 # Mettro
 
-A fast, modern metro companion for iOS and Android. It starts with **Delhi Metro** (DMRC, Rapid Metro Gurugram and the Airport Express), and is built so more cities can be added.
+A fast, modern metro companion for iOS. It starts with **Delhi Metro** (DMRC, Rapid Metro Gurugram and the Airport Express), and is built so more cities can be added.
 
 Built with Expo SDK 58, React Native 0.88 and Expo Router. Text is set in Inter.
 
@@ -29,13 +29,7 @@ Built with Expo SDK 58, React Native 0.88 and Expo Router. Text is set in Inter.
 
 ### Android
 
-The Android app keeps the iOS look: same layout, Inter type and colours, with iOS-style pickers and toggles instead of Material controls.
-
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/1978a57a-3674-4279-8bce-b8fbdf8a6c7d" alt="Android journey planner in dark mode" width="240">
-  <img src="https://github.com/user-attachments/assets/144666e8-eeee-46e8-8f0d-8cd95d38cf66" alt="Android network map in light mode" width="240">
-  <img src="https://github.com/user-attachments/assets/ec7d6ab8-c09f-410f-aad5-51ec35adcf50" alt="Android active trip in dark mode" width="240">
-</p>
+An Android build is also available.
 
 <details>
 <summary>Explore the Android UI in dark and light mode</summary>
