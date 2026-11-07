@@ -36,6 +36,8 @@ const Lines = memo(function Lines({ hidden }: { hidden: Set<string> }) {
   );
 });
 
+const DOT_BOX = 16;
+
 const Stations = memo(function Stations({ onSelect, hidden }: { onSelect: (s: Station) => void; hidden: Set<string> }) {
   return (
     <>
@@ -47,16 +49,20 @@ const Stations = memo(function Stations({ onSelect, hidden }: { onSelect: (s: St
           anchor={{ x: 0.5, y: 0.5 }}
           zIndex={2}
           onPress={() => onSelect(s)}>
-          <View
-            style={{
-              width: s.interchange ? 12 : 9,
-              height: s.interchange ? 12 : 9,
-              borderRadius: 6,
-              backgroundColor: '#FFFFFF',
-              borderWidth: s.interchange ? 2.5 : 2,
-              borderColor: s.interchange ? '#111111' : lineById.get(s.lines[0])!.color,
-            }}
-          />
+          {/* Same square box for every dot so iOS gives every marker the same frame and centre:
+              differently sized custom views were drawn slightly off their station. */}
+          <View style={{ width: DOT_BOX, height: DOT_BOX, alignItems: 'center', justifyContent: 'center' }}>
+            <View
+              style={{
+                width: s.interchange ? 12 : 9,
+                height: s.interchange ? 12 : 9,
+                borderRadius: 6,
+                backgroundColor: '#FFFFFF',
+                borderWidth: s.interchange ? 2.5 : 2,
+                borderColor: s.interchange ? '#111111' : lineById.get(s.lines[0])!.color,
+              }}
+            />
+          </View>
         </Marker>
       ))}
     </>
