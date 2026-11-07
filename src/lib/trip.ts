@@ -165,11 +165,16 @@ export function computeProgress(trip: Trip, now = Date.now()): Progress {
   };
 }
 
-/** Next point where the rider must act (a change or the destination) after the current position. */
-function nextMilestone(p: Progress) {
+/**
+ * The point where the rider must act next: the interchange they're standing at (until its train
+ * leaves), otherwise the next change or the destination.
+ */
+function nextMilestone(trip: Trip, p: Progress, now: number) {
   const last = p.pts.length - 1;
-  for (let i = p.idx + 1; i <= last; i++) if (p.pts[i].transfer || i === last) return { pt: p.pts[i], i };
-  return { pt: p.pts[last], i: last };
+  const cur = p.pts[p.idx];
+  if (cur.transfer && p.idx < last && now < cur.dep + trip.delayMs) return { pt: cur, i: p.idx, here: true };
+  for (let i = p.idx + 1; i <= last; i++) if (p.pts[i].transfer || i === last) return { pt: p.pts[i], i, here: false };
+  return { pt: p.pts[last], i: last, here: false };
 }
 
 /**
@@ -180,11 +185,10 @@ function milestoneMode(trip: Trip) {
   return trip.tracking !== 'background';
 }
 
-export function activityProps(trip: Trip, p: Progress): TripActivityProps {
+export function activityProps(trip: Trip, p: Progress, now = Date.now()): TripActivityProps {
   const j = trip.journey;
   const leg = j.legs[Math.min(p.legIndex, j.legs.length - 1)];
   const line = getLine(leg.lineId);
-  const waiting = p.phase === 'waiting';
   const base = {
     lineColor: line.color,
     lineText: onLineColor(line.color),
@@ -200,21 +204,46 @@ export function activityProps(trip: Trip, p: Progress): TripActivityProps {
     progress: p.progress,
     phase: p.phase,
   };
+  const changeText = (legIndexAfter: number) => {
+    const nl = j.legs[legIndexAfter];
+    return `${lineLabel(getLine(nl.lineId))} → ${nl.towards}${nl.platform ? ' · ' + nl.platform.replace('Platform No.', 'P') : ''}`;
+  };
   if (p.phase === 'arrived') return { ...base, title: `Arrived at ${base.dest}`, next: base.dest, nextAt: Math.round(p.eta), action: p.action };
-  if (waiting) return { ...base, title: `Train at ${base.departText}`, next: base.current, nextAt: Math.round(p.departAt), action: p.action };
-  if (milestoneMode(trip)) {
-    const m = nextMilestone(p);
-    const at = m.pt.at + trip.delayMs;
+  const milestones = milestoneMode(trip);
+  if (p.phase === 'waiting') {
+    let action = p.action;
+    if (milestones) {
+      // the app may be suspended while waiting: also say what comes after boarding
+      const first = p.pts.find((pt, i) => i > 0 && (pt.transfer || i === p.pts.length - 1))!;
+      const at = istClock(first.at + trip.delayMs);
+      action += first.transfer ? ` · change at ${getStation(first.code).name} ${at}` : ` · arrive ${at}`;
+    }
+    return { ...base, title: `Train at ${base.departText}`, next: base.current, nextAt: Math.round(p.departAt), action };
+  }
+  if (milestones) {
+    const m = nextMilestone(trip, p, now);
     const name = getStation(m.pt.code).name;
+    if (m.here) {
+      // standing at an interchange: keep the change instruction until the onward train leaves
+      const dep = m.pt.dep + trip.delayMs;
+      return {
+        ...base,
+        phase: 'transfer',
+        title: `Change here · train ${istClock(dep)}`,
+        next: name,
+        nextAt: Math.round(dep),
+        action: changeText(m.pt.legIndex + 1),
+      };
+    }
+    const at = m.pt.at + trip.delayMs;
     if (m.pt.transfer) {
-      const nl = j.legs[m.pt.legIndex + 1];
       return {
         ...base,
         phase: 'transfer',
         title: `Change at ${name} · ${istClock(at)}`,
         next: name,
         nextAt: Math.round(at),
-        action: `${lineLabel(getLine(nl.lineId))} → ${nl.towards}${nl.platform ? ' · ' + nl.platform.replace('Platform No.', 'P') : ''}`,
+        action: changeText(m.pt.legIndex + 1),
       };
     }
     return {
@@ -237,9 +266,12 @@ export function activityProps(trip: Trip, p: Progress): TripActivityProps {
 }
 
 /** iOS dims the activity after this if no newer content arrived. */
-function staleDate(trip: Trip, p: Progress) {
-  if (milestoneMode(trip) && p.phase !== 'waiting') return new Date(nextMilestone(p).pt.at + trip.delayMs + 2 * 60e3);
-  return new Date(p.eta + 15 * 60e3);
+function staleDate(trip: Trip, p: Progress, now = Date.now()) {
+  if (!milestoneMode(trip)) return new Date(p.eta + 15 * 60e3);
+  // waiting: content is about the departure; afterwards it's about the active milestone
+  if (p.phase === 'waiting') return new Date(p.departAt + 2 * 60e3);
+  const m = nextMilestone(trip, p, now);
+  return new Date((m.here ? m.pt.dep : m.pt.at) + trip.delayMs + 2 * 60e3);
 }
 
 // ---------- Live Activity ----------

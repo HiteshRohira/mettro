@@ -104,7 +104,7 @@ const TripActivity = (p: TripActivityProps, env: LiveActivityEnvironment) => {
       <Image systemName="checkmark.circle.fill" color={accent} size={14} />
     ) : (
       <Text
-        timerInterval={{ lower: new Date(Math.min(now, p.eta - 1000)), upper: etaDate }}
+        timerInterval={{ lower: new Date(Math.min(now, p.nextAt - 1000)), upper: nextDate }}
         countsDown
         modifiers={[font({ size: 13, weight: 'semibold' }), foregroundStyle(accent), monospacedDigit(), frame({ width: 44 })]}
       />

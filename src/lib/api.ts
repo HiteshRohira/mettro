@@ -156,7 +156,9 @@ export async function planOnline(from: string, to: string, when: Date, mode: Api
     for (const l of legs) {
       const d = serviceSeconds(l.depart!);
       const a = serviceSeconds(l.arrive!);
-      if (a < d || d < prev || a - d > 3 * 3600) clockOk = false;
+      // a leg's clock span must also agree with its (plausibility-checked) duration
+      const span = a - d;
+      if (a < d || d < prev || span < l.durationS * 0.5 || span > l.durationS * 3 + 120) clockOk = false;
       prev = a;
     }
   }

@@ -236,6 +236,53 @@ const fixAt = (code: string, at: number) => ({ lat: getStation(code).lat, lng: g
   await resumeTracking();
   ok('resume with no trip ok', true);
 
+  // ===== Round 3 (Sol re-review) =====
+  // 1. impossible planner clock span is discarded too (not just path_time)
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        stations: 2,
+        total_time: '0:00:02',
+        fare: 11,
+        route: [
+          {
+            line: 'Pink Line',
+            line_no: 7,
+            path: [{ name: 'BURARI' }, { name: 'MAJLIS PARK' }],
+            'map-path': ['BURI-MKPR'],
+            path_time: '0:00:02',
+            towards_station: 'MAJLIS PARK',
+            platform_name: 'Platform No. 1',
+            new_start_time: '12:03:50',
+            new_end_time: '12:03:52',
+          },
+        ],
+      }),
+    )) as any;
+  const bm2 = await planOnline('BURI', 'MKPR', new Date(IST('2026-11-10T12:00:00')), 'least-distance');
+  globalThis.fetch = realFetch;
+  const bt = buildTimeline(bm2, IST('2026-11-10T12:03:50'));
+  ok('2 s clock span rejected', bm2.totalS > 120 && bt[bt.length - 1].at - bt[0].at > 120e3, [bm2.totalS, bm2.legs[0].arrive]);
+
+  // 2. milestone mode keeps "change here" during the interchange walk
+  const rr = planOffline('RCK', 'RI', 'fastest')!;
+  newTrip(rr, t0);
+  useTrip.getState().patch({ tracking: 'foreground' });
+  const rtl2 = buildTimeline(rr, t0);
+  const x2 = rtl2.findIndex((p) => p.transfer);
+  const inWalk = rtl2[x2].at + 60e3;
+  const pw = computeProgress(useTrip.getState().trip!, inWalk);
+  const aw = activityProps(useTrip.getState().trip!, pw, inWalk);
+  ok('walk: change instruction kept', aw.title.startsWith('Change here') && aw.action.includes('Red Line'), [aw.title, aw.action]);
+  ok('walk: countdown to onward train', aw.nextAt === Math.round(rtl2[x2].dep), [aw.nextAt, rtl2[x2].dep]);
+
+  // 3. waiting in milestone mode mentions the change and expires at departure
+  newTrip(rr, t0 + 10 * 60e3);
+  useTrip.getState().patch({ tracking: 'foreground' });
+  const pwt = computeProgress(useTrip.getState().trip!, t0);
+  const awt = activityProps(useTrip.getState().trip!, pwt, t0);
+  ok('waiting mentions change', awt.title.startsWith('Train at') && awt.action.includes('change at Kashmere Gate'), awt.action);
+
   Date.now = realNow;
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
