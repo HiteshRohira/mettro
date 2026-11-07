@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "es2022", "module": "esnext", "moduleResolution": "bundler", "jsx": "react-jsx", "strict": false, "skipLibCheck": true, "resolveJsonModule": true, "esModuleInterop": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/widgets/*": ["./stubs/widget.ts"],
+      "@/*": ["../src/*"],
+      "expo-location": ["./stubs/expo-location.ts"],
+      "expo-task-manager": ["./stubs/expo-task-manager.ts"],
+      "expo-background-task": ["./stubs/empty.ts"],
+      "react-native": ["./stubs/react-native.ts"],
+      "expo-widgets": ["./stubs/expo-widgets.ts"],
+      "@react-native-async-storage/async-storage": ["./stubs/async-storage.ts"]
+    }
+  }
+}

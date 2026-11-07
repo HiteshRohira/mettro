@@ -21,7 +21,7 @@ export default function MoreScreen() {
   const [checking, setChecking] = useState(false);
 
   const liveCount = status.networkStationsLive;
-  const newStations = liveCount != null && liveCount - 1 > BUNDLED_STATION_COUNT; // station_list has 1 depot entry
+  const newStations = liveCount != null && liveCount > BUNDLED_STATION_COUNT; // depots are filtered in fetchStationCount
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top }}>
@@ -152,7 +152,7 @@ export default function MoreScreen() {
                 icon="sparkles"
                 iconColor={c.warn}
                 title="New stations available"
-                subtitle={`DMRC now lists ${liveCount! - 1} stations. Update Mettro to get them.`}
+                subtitle={`DMRC now lists ${liveCount} stations. Update Mettro to get them.`}
               />
             </>
           ) : null}

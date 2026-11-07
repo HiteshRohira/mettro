@@ -1,4 +1,5 @@
-import { codeForName, edgeBetween, LINES, stationByCode, titleTowards, type Line } from '@/lib/network';
+import { codeForName, edgeBetween, lineById, LINES, linesBetween, stationByCode, titleTowards, type Line } from '@/lib/network';
+import { hmsToSeconds, istDay, istIso } from '@/lib/time';
 import { estimateFare } from '@/lib/fare';
 import type { Journey, Leg } from '@/lib/router';
 import { towardsFor } from '@/lib/router';
@@ -57,33 +58,46 @@ export async function fetchStationLive(code: string): Promise<StationLive> {
 
 export async function fetchStationCount(): Promise<number> {
   const list = await get<any[]>('station_list');
-  return list.length;
-}
-
-const pad = (n: number) => String(n).padStart(2, '0');
-function isoLocal(d: Date) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00.000`;
+  // the list includes depot pseudo-stations such as "SPBI-Badli Dipo"
+  return list.filter((s) => !/\s/.test(String(s.station_code ?? '')) && !/dipo|depot/i.test(String(s.station_name ?? ''))).length;
 }
 
 function hms(s?: string | null) {
-  if (!s) return 0;
-  const [h, m, sec] = s.split(':').map(Number);
-  return (h || 0) * 3600 + (m || 0) * 60 + (sec || 0);
+  return s ? hmsToSeconds(s) : 0;
+}
+
+/** Seconds on the service-day scale (00:00–02:59 → 24:00–26:59) so times compare across midnight. */
+function serviceSeconds(s: string) {
+  const sec = hmsToSeconds(s);
+  return sec < 3 * 3600 ? sec + 24 * 3600 : sec;
+}
+
+/** Thrown when DMRC answers but has no train for this trip at this time (e.g. after the last train). */
+export class NoServiceError extends Error {
+  constructor(message = 'No trains at this time') {
+    super(message);
+    this.name = 'NoServiceError';
+  }
 }
 
 function lineFor(lineNo: number | undefined, a: string, b: string): Line | undefined {
-  const e = edgeBetween(a, b);
-  if (e) return LINES.find((l) => l.id === e.line);
+  const candidates = linesBetween(a, b);
+  // Shared stretches (Anand Vihar–Karkarduma is Blue *and* Pink): DMRC's line_no decides.
+  const byNum = candidates.find((id) => lineById.get(id)?.num === lineNo);
+  const id = byNum ?? candidates[0];
+  if (id) return lineById.get(id);
   return LINES.find((l) => l.num === lineNo);
 }
 
 export type ApiMode = 'least-distance' | 'minimum-interchange';
 
 export async function planOnline(from: string, to: string, when: Date, mode: ApiMode): Promise<Journey> {
-  const r = await get<any>(`station_route/${from}/${to}/${mode}/${isoLocal(when)}`, 15000);
+  const r = await get<any>(`station_route/${from}/${to}/${mode}/${istIso(when.getTime())}`, 15000);
+  if (r && r.status === false && /no path/i.test(String(r['Error Message'] ?? ''))) throw new NoServiceError();
   if (!r || r.status === false || !Array.isArray(r.route)) throw new Error(r?.['Error Message'] || 'No route');
   const legs: Leg[] = [];
   let km = 0;
+  let interchangeS = 0;
   for (const seg of r.route) {
     // Prefer station codes from map-path ("RI-RHW"); names in `path` can be outdated.
     let codes: string[] = [];
@@ -111,14 +125,15 @@ export async function planOnline(from: string, to: string, when: Date, mode: Api
       hopS.push(e?.s ?? 120);
     }
     km += hopKm.reduce((a, b) => a + b, 0);
+    if (legs.length) interchangeS += (Number(seg.station_interchange_time) || 5) * 60;
     // scale per-hop seconds to match the planner's leg time
     const sum = hopS.reduce((a, b) => a + b, 0) || 1;
-    const segS = hopS.map((s) => Math.round((s * total) / sum));
+    const segS = hopS.map((s) => Math.round((s * (total || sum)) / sum));
     legs.push({
       lineId: line.id,
       stations: codes,
       towards: seg.towards_station ? titleTowards(seg.towards_station) : towardsFor(line.id, codes[0], codes[1]),
-      platform: seg.platform_name ?? null,
+      platform: seg.platform_name || null,
       depart: seg.new_start_time ?? null,
       arrive: seg.new_end_time ?? null,
       durationS: total || segS.reduce((a, b) => a + b, 0),
@@ -126,25 +141,40 @@ export async function planOnline(from: string, to: string, when: Date, mode: Api
     });
   }
   if (!legs.length) throw new Error('No route');
+
+  // Sanity-check the planner's clock times: each leg must end after it starts and connections
+  // must not go back in time. Bad times (seen live, e.g. arrival before departure) are dropped
+  // so the app falls back to durations instead of showing a 23-hour journey.
+  const timed = legs.every((l) => l.depart && l.arrive);
+  let clockOk = timed;
+  if (timed) {
+    let prev = -1;
+    for (const l of legs) {
+      const d = serviceSeconds(l.depart!);
+      const a = serviceSeconds(l.arrive!);
+      if (a < d || d < prev || a - d > 3 * 3600) clockOk = false;
+      prev = a;
+    }
+  }
+  if (timed && !clockOk) legs.forEach((l) => (l.arrive = null));
+  const durationOnly = legs.reduce((a, l) => a + l.durationS, 0) + interchangeS;
+  const totalS = clockOk ? serviceSeconds(legs[legs.length - 1].arrive!) - serviceSeconds(legs[0].depart!) : durationOnly;
+
   const stops = legs.reduce((a, l) => a + l.stations.length - 1, 0);
   const est = estimateFare(legs, km);
-  const sunday = when.getDay() === 0;
+  const planner = typeof r.fare === 'number' ? (r.fare as number) : null;
   return {
     id: `dmrc-${mode}-${from}-${to}-${legs.map((l) => l.lineId).join('.')}`,
     from,
     to,
     legs,
-    totalS: (() => {
-      const d = legs[0].depart ? hms(legs[0].depart) : 0;
-      const a = legs[legs.length - 1].arrive ? hms(legs[legs.length - 1].arrive) : 0;
-      if (d && a) return a >= d ? a - d : a + 86400 - d;
-      return hms(r.total_time);
-    })(),
+    totalS,
     stops,
     interchanges: legs.length - 1,
-    fare: typeof r.fare === 'number' ? r.fare : est.normal,
-    fareSunday: sunday ? (typeof r.fare === 'number' ? r.fare : est.sunday) : est.sunday,
-    fareSource: typeof r.fare === 'number' ? 'dmrc' : 'estimate',
+    // the planner prices the queried date (Sunday table on Sundays)
+    fare: planner ?? (istDay(when.getTime()) === 0 ? est.sunday : est.normal),
+    fareSunday: est.sunday,
+    fareSource: planner != null ? 'dmrc' : 'estimate',
     source: 'dmrc',
     mode: mode === 'least-distance' ? 'fastest' : 'fewest-changes',
     queriedAt: Date.now(),

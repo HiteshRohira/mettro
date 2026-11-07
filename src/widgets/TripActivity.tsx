@@ -28,7 +28,9 @@ export type TripActivityProps = {
   stopsLeft: number;
   progress: number; // 0..1
   action: string; // "Change at Rajiv Chowk for Blue Line" / "Get off at Patel Chowk"
-  phase: 'riding' | 'transfer' | 'arriving' | 'arrived';
+  phase: 'waiting' | 'riding' | 'transfer' | 'arriving' | 'arrived';
+  etaText: string; // arrival clock (IST), formatted by the app
+  departText: string; // first departure clock (IST)
 };
 
 const TripActivity = (p: TripActivityProps, env: LiveActivityEnvironment) => {
@@ -40,11 +42,16 @@ const TripActivity = (p: TripActivityProps, env: LiveActivityEnvironment) => {
   const nextDate = new Date(Math.max(p.nextAt, now + 1000));
   const startDate = new Date(Math.min(p.start, now));
   const arrived = p.phase === 'arrived';
-  const pad2 = (n: number) => (n < 10 ? '0' + n : '' + n);
-  const etaD = new Date(p.eta);
-  const etaClock = pad2(etaD.getHours()) + ':' + pad2(etaD.getMinutes());
+  const etaClock = p.etaText;
+  const waiting = p.phase === 'waiting';
   const stopsLabel = p.stopsLeft === 1 ? '1 stop' : p.stopsLeft + ' stops';
-  const headline = arrived ? 'Arrived at ' + p.dest : p.phase === 'arriving' ? 'Next: ' + p.next + ' — get off' : 'Next: ' + p.next;
+  const headline = arrived
+    ? 'Arrived at ' + p.dest
+    : waiting
+      ? 'Train at ' + p.departText
+      : p.phase === 'arriving'
+        ? 'Next: ' + p.next + ' — get off'
+        : 'Next: ' + p.next;
 
   const chip = (
     <Text

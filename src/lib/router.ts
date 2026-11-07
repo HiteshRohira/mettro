@@ -1,4 +1,4 @@
-import { DIR_TIMINGS, EDGES, getLine, getStation, lineById, titleTowards, type Line } from '@/lib/network';
+import { DIR_TIMINGS, EDGES, getLine, getStation, lineById, titleTowards } from '@/lib/network';
 import { estimateFare } from '@/lib/fare';
 
 export type Leg = {
@@ -29,7 +29,6 @@ export type Journey = {
   km: number;
 };
 
-const DWELL = 0; // planner edge times already include dwell
 const INTERCHANGE_S = 6 * 60; // walk + wait estimate
 
 // adjacency per (station,line)
@@ -38,15 +37,19 @@ const adj = new Map<string, Arc[]>();
 for (const e of EDGES) {
   const s = e.s;
   (adj.get(e.a) ?? adj.set(e.a, []).get(e.a)!).push({ to: e.b, line: e.line, s, km: e.km });
-  (adj.get(e.b) ?? adj.set(e.b, []).get(e.b)!).push({ to: e.a, line: e.line, s, km: e.km });
+  // one-way edges (Rapid Metro loop) only run a -> b
+  if (!e.oneway) (adj.get(e.b) ?? adj.set(e.b, []).get(e.b)!).push({ to: e.a, line: e.line, s, km: e.km });
 }
 
-/** Blue LN3/LN4 & Pink/Magenta extensions are through-running in practice: treat as same "colour" for transfer penalties */
+/**
+ * Lines DMRC's planner treats as one continuous ride (no change needed):
+ * Blue main line + Vaishali branch, and the Pink/Magenta extensions.
+ */
 const colourGroup = (lineId: string) => {
-  const l = lineById.get(lineId)!;
+  if (lineId === 'LN4') return 'LN3';
   if (lineId === 'LN7EXTN') return 'LN7';
   if (lineId === 'LN8EXTN') return 'LN8';
-  return l.id;
+  return lineById.get(lineId)!.id;
 };
 
 class Heap<T> {
@@ -126,7 +129,7 @@ export function planOffline(from: string, to: string, mode: Journey['mode'] = 'f
     for (const arc of adj.get(v.st) ?? []) {
       const g = colourGroup(arc.line);
       const switching = v.line !== null && v.line !== g;
-      const cost = k + arc.s + DWELL + (switching ? penalty : 0);
+      const cost = k + arc.s + (switching ? penalty : 0);
       const key = `${arc.to}|${g}`;
       if (cost < (dist.get(key) ?? Infinity)) {
         dist.set(key, cost);
@@ -152,23 +155,21 @@ function journeyFromHops(from: string, to: string, hops: { a: string; b: string;
   const legs: Leg[] = [];
   for (const hop of hops) {
     const last = legs[legs.length - 1];
-    const sameRun =
-      last &&
-      colourGroup(last.lineId) === colourGroup(hop.line) &&
-      !(last.lineId === 'LN3' && hop.line === 'LN4') &&
-      !(last.lineId === 'LN4' && hop.line === 'LN3');
+    const sameRun = last && colourGroup(last.lineId) === colourGroup(hop.line);
     if (sameRun) {
       last.stations.push(hop.b);
-      last.segS.push(hop.s + DWELL);
-      last.durationS += hop.s + DWELL;
+      last.segS.push(hop.s);
+      last.durationS += hop.s;
+      // a through-running ride is signed with its final destination (e.g. Blue → Vaishali)
+      last.towards = towardsFor(hop.line, hop.a, hop.b);
     } else {
       legs.push({
         lineId: hop.line,
         stations: [hop.a, hop.b],
         towards: towardsFor(hop.line, hop.a, hop.b),
         platform: DIR_TIMINGS[`${hop.a}|${hop.b}`]?.platform ?? null,
-        durationS: hop.s + DWELL,
-        segS: [hop.s + DWELL],
+        durationS: hop.s,
+        segS: [hop.s],
       });
     }
   }
@@ -192,29 +193,6 @@ function journeyFromHops(from: string, to: string, hops: { a: string; b: string;
     queriedAt: Date.now(),
     km,
   };
-}
-
-export function lineOfLeg(leg: Leg): Line {
-  return getLine(leg.lineId);
-}
-
-/** Flatten a journey into the station sequence with cumulative seconds from departure. */
-export function journeyTimeline(j: Journey) {
-  const pts: { code: string; legIndex: number; t: number; isTransfer: boolean }[] = [];
-  let t = 0;
-  j.legs.forEach((leg, li) => {
-    leg.stations.forEach((code, si) => {
-      if (si === 0 && li > 0) {
-        // transfer station already added as end of previous leg
-        t += INTERCHANGE_S;
-        pts[pts.length - 1].isTransfer = true;
-        return;
-      }
-      if (si > 0) t += leg.segS[si - 1] ?? 120;
-      pts.push({ code, legIndex: li, t, isTransfer: false });
-    });
-  });
-  return pts;
 }
 
 export const INTERCHANGE_SECONDS = INTERCHANGE_S;

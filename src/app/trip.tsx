@@ -36,7 +36,9 @@ export default function TripScreen() {
   const line = getLine(leg.lineId);
   const fg = onLineColor(line.color);
   const minsToNext = Math.max(0, Math.round((p.nextAt - now) / 60000));
-  const gpsFresh = trip.gpsIdxAt && now - trip.gpsIdxAt < 5 * 60e3;
+  const gpsFresh = trip.anchorAt != null && trip.lastFix != null && now - trip.anchorAt < 5 * 60e3;
+  const waiting = p.phase === 'waiting';
+  const minsToDepart = Math.max(0, Math.round((p.departAt - now) / 60000));
   const delayMin = Math.round(trip.delayMs / 60000);
 
   const end = () =>
@@ -76,11 +78,17 @@ export default function TripScreen() {
             </T>
           </View>
           <T v="title" color={fg}>
-            {p.phase === 'arrived' ? `You’ve arrived at ${getStation(j.to).name}` : `Next: ${p.next ? getStation(p.next.code).name : ''}`}
+            {p.phase === 'arrived'
+              ? `You’ve arrived at ${getStation(j.to).name}`
+              : waiting
+                ? `Train at ${fmtClock(p.departAt)}`
+                : `Next: ${p.next ? getStation(p.next.code).name : ''}`}
           </T>
           {p.phase !== 'arrived' ? (
             <T v="bodyStrong" color={fg} style={{ opacity: 0.9 }}>
-              {minsToNext <= 0 ? 'Arriving now' : `in about ${minsToNext} min`} · {p.stopsLeft} stop{p.stopsLeft === 1 ? '' : 's'} to go
+              {waiting
+                ? `Leaves ${getStation(p.current.code).name} in ${minsToDepart} min`
+                : `${minsToNext <= 0 ? 'Arriving now' : `in about ${minsToNext} min`} · ${p.stopsLeft} stop${p.stopsLeft === 1 ? '' : 's'} to go`}
             </T>
           ) : null}
           <View style={{ height: 6, borderRadius: 3, backgroundColor: fg + '33', overflow: 'hidden' }}>

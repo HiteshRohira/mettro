@@ -5,10 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { JourneyLegs, JourneySummaryLine } from '@/components/journey-view';
 import { Button, Card, Icon, Pill, Press, T } from '@/components/ui';
-import { planOnline } from '@/lib/api';
-import { fmtClock, fmtDuration, hm, hmToMinutes } from '@/lib/format';
-import { DIR_TIMINGS, getStation, titleTowards } from '@/lib/network';
+import { NoServiceError, planOnline } from '@/lib/api';
+import { fareFor } from '@/lib/fare';
+import { fmtClock, fmtDuration, hm } from '@/lib/format';
+import { getStation, stationByCode } from '@/lib/network';
 import { planOffline, type Journey } from '@/lib/router';
+import { checkServiceHours } from '@/lib/service';
+import { istDay } from '@/lib/time';
 import { plannedStart, startTrip } from '@/lib/trip';
 import { useStatus, isNormal } from '@/store/status';
 import { radius, useTheme } from '@/theme';
@@ -24,19 +27,37 @@ function dedupe(list: Journey[]) {
 }
 
 export default function JourneyScreen() {
+  const { from, to, at } = useLocalSearchParams<{ from: string; to: string; at?: string }>();
+  // deep links can carry anything: don't crash on unknown stations
+  if (!stationByCode.has(from) || !stationByCode.has(to) || from === to) return <InvalidJourney />;
+  return <JourneyView from={from} to={to} at={at} />;
+}
+
+function InvalidJourney() {
+  const { c } = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg, padding: 24, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+      <Stack.Screen options={{ title: 'Routes' }} />
+      <T v="h3">Can’t plan this route</T>
+      <Button title="Back" kind="secondary" onPress={() => router.back()} />
+    </View>
+  );
+}
+
+function JourneyView({ from, to, at }: { from: string; to: string; at?: string }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { from, to, at } = useLocalSearchParams<{ from: string; to: string; at?: string }>();
   const when = useMemo(() => (at ? new Date(Number(at)) : new Date()), [at]);
   const offlineOptions = useMemo(
     () => dedupe([planOffline(from, to, 'fastest'), planOffline(from, to, 'fewest-changes')].filter(Boolean) as Journey[]),
     [from, to],
   );
-  const [online, setOnline] = useState<{ key: string; list: Journey[] | null } | null>(null);
+  const [online, setOnline] = useState<{ key: string; list: Journey[] | null; noService: boolean } | null>(null);
   const [sel, setSel] = useState(0);
   const reqKey = `${from}|${to}|${when.getTime()}`;
   const loading = online?.key !== reqKey;
-  const offline = !loading && !online?.list;
+  const noService = !loading && !!online?.noService;
+  const offline = !loading && !online?.list && !noService;
   const options = !loading && online?.list ? online.list : offlineOptions;
   const [starting, setStarting] = useState(false);
   const lineStatus = useStatus((s) => s.lines);
@@ -46,7 +67,8 @@ export default function JourneyScreen() {
     Promise.allSettled([planOnline(from, to, when, 'least-distance'), planOnline(from, to, when, 'minimum-interchange')]).then((res) => {
       if (!alive) return;
       const ok = res.filter((r): r is PromiseFulfilledResult<Journey> => r.status === 'fulfilled').map((r) => r.value);
-      setOnline({ key: reqKey, list: ok.length ? dedupe(ok).sort((a, b) => a.totalS - b.totalS) : null });
+      const noSvc = !ok.length && res.some((r) => r.status === 'rejected' && r.reason instanceof NoServiceError);
+      setOnline({ key: reqKey, list: ok.length ? dedupe(ok).sort((a, b) => a.totalS - b.totalS) : null, noService: noSvc });
       setSel(0);
     });
     return () => {
@@ -58,16 +80,13 @@ export default function JourneyScreen() {
   const fromS = getStation(from);
   const toS = getStation(to);
 
-  // Service-hours check for the first boarding
-  const firstLeg = j?.legs[0];
-  const dirTiming = firstLeg ? DIR_TIMINGS[`${firstLeg.stations[0]}|${firstLeg.stations[1]}`] : undefined;
-  const nowMin = when.getHours() * 60 + when.getMinutes();
-  const lastMin = hmToMinutes(dirTiming?.last);
-  const firstMin = hmToMinutes(dirTiming?.first);
+  // Service hours for every leg (first/last train in that direction), in IST service-day minutes.
+  const issue = j ? checkServiceHours(j, when.getTime()) : null;
   const noTrainsOnline = j?.source === 'dmrc' && j.legs.some((l) => !l.depart);
-  const afterLast = noTrainsOnline || (lastMin !== null && nowMin >= 20 * 60 && nowMin > lastMin);
-  const beforeFirst = !afterLast && firstMin !== null && nowMin < firstMin && nowMin < 7 * 60;
-  const nearLast = !afterLast && lastMin !== null && nowMin >= lastMin - 45 && nowMin <= lastMin;
+  const afterLast = noService || noTrainsOnline || issue?.kind === 'after-last';
+  const beforeFirst = !afterLast && issue?.kind === 'before-first';
+  const nearLast = !afterLast && issue?.kind === 'near-last';
+  const sunday = istDay(when.getTime()) === 0;
   const affected = j ? [...new Set(j.legs.map((l) => l.lineId))].filter((id) => !isNormal(lineStatus[id])) : [];
 
   const depart = j ? plannedStart(j, when.getTime()) : 0;
@@ -76,16 +95,21 @@ export default function JourneyScreen() {
   const onStart = async () => {
     if (!j) return;
     setStarting(true);
-    const isNow = !at || Math.abs(Number(at) - Date.now()) < 10 * 60e3;
-    const res = await startTrip(j, isNow ? undefined : Date.now() + 60e3);
-    setStarting(false);
-    if (res === 'denied') {
-      Alert.alert(
-        'Tracking by schedule',
-        'Location is off, so Mettro will follow the timetable. You can tap a station on the trip screen to correct your position.',
-      );
+    try {
+      // plannedStart waits for the planner's train (up to a few hours, e.g. before first service)
+      const res = await startTrip(j);
+      if (res === 'denied') {
+        Alert.alert(
+          'Tracking by schedule',
+          'Location is off, so Mettro will follow the timetable. You can tap a station on the trip screen to correct your position.',
+        );
+      }
+      router.replace('/trip');
+    } catch (e) {
+      Alert.alert('Couldn’t start the trip', String((e as Error)?.message ?? e));
+    } finally {
+      setStarting(false);
     }
-    router.replace('/trip');
   };
 
   return (
@@ -109,7 +133,7 @@ export default function JourneyScreen() {
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <T v="h3">{fmtDuration(o.totalS)}</T>
                     <T v="label" dim>
-                      {o.fare != null ? `₹${o.fare}` : ''}
+                      {fareFor(o, when.getTime()) != null ? `₹${fareFor(o, when.getTime())}` : ''}
                     </T>
                   </View>
                   <JourneySummaryLine j={o} />
@@ -142,9 +166,9 @@ export default function JourneyScreen() {
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <T v="micro" faint>
-                    {when.getDay() === 0 ? 'Sunday fare' : 'Token fare'}
+                    {sunday ? 'Sunday fare' : 'Token fare'}
                   </T>
-                  <T v="title">{j.fare != null ? `₹${j.fare}` : '—'}</T>
+                  <T v="title">{fareFor(j, when.getTime()) != null ? `₹${fareFor(j, when.getTime())}` : '—'}</T>
                 </View>
               </View>
               <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
@@ -175,17 +199,25 @@ export default function JourneyScreen() {
               <Notice
                 icon="moon.zzz.fill"
                 tone="danger"
-                text={`The last train from ${fromS.name} towards ${titleTowards(dirTiming?.to) || firstLeg?.towards} has left (${hm(dirTiming?.last)}). First train tomorrow: ${hm(dirTiming?.first)}.`}
+                text={
+                  issue?.kind === 'after-last'
+                    ? `The last train from ${issue.station} towards ${issue.towards} has left (${hm(issue.timing.last)}). First train: ${hm(issue.timing.first)}.`
+                    : 'No trains for this trip right now. Try a later time.'
+                }
               />
             ) : null}
-            {beforeFirst ? (
-              <Notice icon="sunrise.fill" tone="warn" text={`Service hasn’t started yet. First train from ${fromS.name}: ${hm(dirTiming?.first)}.`} />
+            {beforeFirst && issue ? (
+              <Notice
+                icon="sunrise.fill"
+                tone="warn"
+                text={`Service hasn’t started yet. First train from ${issue.station} towards ${issue.towards}: ${hm(issue.timing.first)}.`}
+              />
             ) : null}
-            {nearLast ? (
+            {nearLast && issue ? (
               <Notice
                 icon="exclamationmark.triangle.fill"
                 tone="warn"
-                text={`Hurry — last train from ${fromS.name} towards ${firstLeg?.towards} is at ${hm(dirTiming?.last)}.`}
+                text={`Hurry — last train from ${issue.station} towards ${issue.towards} is at ${hm(issue.timing.last)}.`}
               />
             ) : null}
             {affected.length ? (
@@ -223,7 +255,7 @@ export default function JourneyScreen() {
             borderTopWidth: 0.5,
             borderTopColor: c.border,
           }}>
-          <Button title="Start trip" icon="location.north.line.fill" onPress={onStart} loading={starting} disabled={afterLast && !loading} />
+          <Button title="Start trip" icon="location.north.line.fill" onPress={onStart} loading={starting} disabled={afterLast} />
           <T v="caption" faint style={{ textAlign: 'center', marginTop: 8 }}>
             Live Activity on your Lock Screen & Dynamic Island, stop by stop
           </T>

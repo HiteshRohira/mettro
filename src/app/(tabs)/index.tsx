@@ -12,12 +12,13 @@ import { directionsAt, getStation, stationColors, titleTowards } from '@/lib/net
 import { useNearest } from '@/lib/useLocation';
 import { usePlanner } from '@/store/planner';
 import { useNow } from '@/lib/useNow';
+import { istParts } from '@/lib/time';
 import { useSettings } from '@/store/settings';
 import { disruptedLines, useStatus } from '@/store/status';
 import { radius, useTheme } from '@/theme';
 
-function greeting() {
-  const h = new Date().getHours();
+function greeting(now: number) {
+  const h = istParts(now).h;
   if (h < 5) return 'Late night';
   if (h < 12) return 'Good morning';
   if (h < 17) return 'Good afternoon';
@@ -68,7 +69,7 @@ export default function PlanScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <View>
             <T v="caption" dim>
-              {greeting()} · Delhi Metro
+              {greeting(now)} · Delhi Metro
             </T>
             <T v="display">Where to?</T>
           </View>

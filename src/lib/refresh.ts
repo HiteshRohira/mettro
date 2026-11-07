@@ -3,6 +3,7 @@ import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
 
 import { fetchStationCount } from '@/lib/api';
+import { whenHydrated } from '@/lib/hydration';
 import { directionsAt, getStation, LINES, lineLabel, STATIONS } from '@/lib/network';
 import { useSettings } from '@/store/settings';
 import { disruptedLines, isNormal, useStatus } from '@/store/status';
@@ -49,21 +50,28 @@ export function updateStatusWidget() {
   }
 }
 
+let stationCountCheckedAt = 0;
+
+/** Refresh line status (+ the daily new-stations check). Resolves true only if DMRC answered. */
 export async function refreshData() {
+  await whenHydrated();
   const ok = await useStatus.getState().refresh();
-  if (ok) updateStatusWidget();
-  try {
-    const count = await fetchStationCount();
-    useStatus.getState().set({ networkStationsLive: count });
-  } catch {}
+  updateStatusWidget();
+  if (ok && Date.now() - stationCountCheckedAt > 24 * 3600e3) {
+    try {
+      const count = await fetchStationCount();
+      useStatus.getState().set({ networkStationsLive: count });
+      stationCountCheckedAt = Date.now();
+    } catch {}
+  }
   return ok;
 }
 
 if (!TaskManager.isTaskDefined(REFRESH_TASK)) {
   TaskManager.defineTask(REFRESH_TASK, async () => {
     try {
-      await refreshData();
-      return BackgroundTask.BackgroundTaskResult.Success;
+      const ok = await refreshData();
+      return ok ? BackgroundTask.BackgroundTaskResult.Success : BackgroundTask.BackgroundTaskResult.Failed;
     } catch {
       return BackgroundTask.BackgroundTaskResult.Failed;
     }

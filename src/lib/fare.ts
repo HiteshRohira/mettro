@@ -1,3 +1,4 @@
+import { istDay } from '@/lib/time';
 import type { Leg } from '@/lib/router';
 
 /**
@@ -14,15 +15,13 @@ export const FARE_SLABS: { upTo: number; normal: number; sunday: number; label: 
   { upTo: Infinity, normal: 64, sunday: 54, label: 'More than 32 km' },
 ];
 
-const TRACK_FACTOR = 1.0; // calibrated against the DMRC planner
-
-export function estimateFare(legs: Leg[], straightKm: number) {
-  const km = straightKm * TRACK_FACTOR;
+/** Straight-line km between stations matched the planner's slabs best (calibrated, no detour factor). */
+export function estimateFare(legs: Leg[], km: number) {
   const usesAirport = legs.some((l) => l.lineId === 'LN10');
   const usesRapid = legs.some((l) => l.lineId === 'LN11');
   const slab = FARE_SLABS.find((s) => km <= s.upTo)!;
-  let normal = slab.normal;
-  let sunday = slab.sunday;
+  const normal = slab.normal;
+  const sunday = slab.sunday;
   if (usesAirport || usesRapid) {
     // Airport Express & Rapid Metro have separate fare tables; the planner value is authoritative.
     return { normal: null as number | null, sunday: null as number | null, km };
@@ -30,6 +29,12 @@ export function estimateFare(legs: Leg[], straightKm: number) {
   return { normal, sunday, km };
 }
 
-export function isSundayFareDay(d = new Date()) {
-  return d.getDay() === 0;
+/**
+ * Fare to show for a journey travelled at `when`. Planner fares are already for the queried
+ * date; offline estimates pick the Sunday slab table on Sundays (IST). National holidays also
+ * use the Sunday table but aren't known offline.
+ */
+export function fareFor(j: { fare: number | null; fareSunday?: number | null; source: string }, when: number) {
+  if (j.source !== 'dmrc' && istDay(when) === 0) return j.fareSunday ?? j.fare;
+  return j.fare;
 }

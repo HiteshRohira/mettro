@@ -6,7 +6,8 @@ import { AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { refreshData, registerRefreshTask, updateStatusWidget } from '@/lib/refresh';
-import { tick } from '@/lib/trip';
+import { whenHydrated } from '@/lib/hydration';
+import { resumeTracking, tick } from '@/lib/trip';
 import { font, useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -16,15 +17,18 @@ export default function RootLayout() {
 
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
-    const boot = async () => {
+    const boot = async (first: boolean) => {
+      await whenHydrated();
+      // trip first: resuming underground with weak signal must not wait on network calls
+      if (first) await resumeTracking().catch(() => {});
+      await tick().catch(() => {});
       updateStatusWidget();
       await refreshData().catch(() => {});
-      await registerRefreshTask();
-      await tick().catch(() => {});
+      if (first) await registerRefreshTask();
     };
-    boot();
+    boot(true);
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') boot();
+      if (s === 'active') boot(false);
     });
     return () => {
       sub.remove();

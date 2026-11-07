@@ -12,10 +12,9 @@
       "supportsTablet": false,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Mettro uses your location to find the nearest metro station and track your trip stop by stop.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Mettro uses your location during an active trip to keep your Live Activity updated and alert you before your stop, even when the app is in the background.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Mettro uses your location during an active trip to keep your Live Activity on the right station while your phone is locked.",
         "UIBackgroundModes": [
           "location",
-          "fetch",
           "processing"
         ],
         "NSSupportsLiveActivities": true,

@@ -15,7 +15,8 @@ type StatusState = {
   set: (p: Partial<StatusState>) => void;
 };
 
-export const isNormal = (s?: string | null) => !s || /normal/i.test(s);
+/** DMRC reports "Normal Service", "Partial Service", "No Service"… Only a leading "normal" counts. */
+export const isNormal = (s?: string | null) => !s || /^\s*normal\b/i.test(s);
 
 export const useStatus = create<StatusState>()(
   persist(
