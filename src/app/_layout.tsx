@@ -2,17 +2,24 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { AppState } from 'react-native';
+import { Appearance, AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { refreshData, registerRefreshTask, updateStatusWidget } from '@/lib/refresh';
 import { tick } from '@/lib/trip';
+import { useSettings } from '@/store/settings';
 import { font, useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const { c, dark } = useTheme();
+  const appearance = useSettings((s) => s.appearance);
+
+  // Without this only React views follow the in-app setting; the status bar and native controls follow the system.
+  useEffect(() => {
+    Appearance.setColorScheme(appearance === 'system' ? 'unspecified' : appearance);
+  }, [appearance]);
 
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
@@ -48,6 +55,8 @@ export default function RootLayout() {
             headerBackButtonDisplayMode: 'minimal',
             headerTintColor: c.text,
             headerShadowVisible: false,
+            // Status bar is view-controller based (react-native-screens), so expo-status-bar alone is ignored.
+            statusBarStyle: dark ? 'light' : 'dark',
             headerStyle: { backgroundColor: c.bg },
             contentStyle: { backgroundColor: c.bg },
           }}>

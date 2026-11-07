@@ -88,8 +88,9 @@ export function Button({
   color?: string;
 }) {
   const { c } = useTheme();
-  const bg = kind === 'primary' ? (color ?? c.ink) : kind === 'secondary' ? c.surface2 : kind === 'danger' ? c.dangerSoft : 'transparent';
-  const fg = kind === 'primary' ? (color ? onLineColor(color) : c.onInk) : kind === 'danger' ? c.danger : c.text;
+  const off = disabled && kind === 'primary';
+  const bg = off ? c.surface2 : kind === 'primary' ? (color ?? c.ink) : kind === 'secondary' ? c.surface2 : kind === 'danger' ? c.dangerSoft : 'transparent';
+  const fg = off ? c.text3 : kind === 'primary' ? (color ? onLineColor(color) : c.onInk) : kind === 'danger' ? c.danger : c.text;
   return (
     <Press
       onPress={() => {
@@ -110,7 +111,7 @@ export function Button({
           justifyContent: 'center',
           gap: 8,
           paddingHorizontal: 18,
-          opacity: disabled ? 0.5 : 1,
+          opacity: disabled && !off ? 0.5 : 1,
         },
         style,
       ]}>

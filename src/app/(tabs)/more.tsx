@@ -1,6 +1,8 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { ScrollView, Switch, View } from 'react-native';
+import { Host, Toggle } from '@expo/ui/swift-ui';
+import { labelsHidden } from '@expo/ui/swift-ui/modifiers';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, Disclosure, Divider, Press, Row, SectionHeader, T } from '@/components/ui';
@@ -12,7 +14,7 @@ import { useStatus } from '@/store/status';
 import { radius, useTheme } from '@/theme';
 
 export default function MoreScreen() {
-  const { c } = useTheme();
+  const { c, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const s = useSettings();
   const liveCount = useStatus((st) => st.networkStationsLive);
@@ -55,13 +57,16 @@ export default function MoreScreen() {
             <T v="body" style={{ flex: 1 }}>
               Live Activity during trips
             </T>
-            <Switch accessibilityLabel="Live Activity during trips" value={s.liveActivities} onValueChange={(v) => s.set({ liveActivities: v })} />
+            {/* SwiftUI toggle: RN's Switch reports a stale frame on iOS 26 and sits off-centre */}
+            <Host matchContents colorScheme={scheme}>
+              <Toggle isOn={s.liveActivities} onIsOnChange={(v) => s.set({ liveActivities: v })} label="Live Activity during trips" modifiers={[labelsHidden()]} />
+            </Host>
           </View>
           <Disclosure title="Appearance" detail={s.appearance === 'system' ? 'Automatic' : s.appearance === 'light' ? 'Light' : 'Dark'}>
-            <View style={{ flexDirection: 'row', gap: 6, backgroundColor: c.surface2, padding: 4, borderRadius: radius.md }}>
+            <View style={{ flexDirection: 'row', gap: 4, backgroundColor: c.surface2, padding: 4, borderRadius: radius.pill }}>
               {(['system', 'light', 'dark'] as Appearance[]).map((a) => (
                 <Press key={a} onPress={() => s.set({ appearance: a })} accessibilityLabel={`Appearance ${a}`} accessibilityState={{ selected: s.appearance === a }}
-                  style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 44, borderRadius: radius.sm, backgroundColor: s.appearance === a ? c.surface : 'transparent' }}>
+                  style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 40, borderRadius: radius.pill, backgroundColor: s.appearance === a ? c.raised : 'transparent' }}>
                   <T v="label" color={s.appearance === a ? c.text : c.text2}>{a === 'system' ? 'Auto' : a === 'light' ? 'Light' : 'Dark'}</T>
                 </Press>
               ))}

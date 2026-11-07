@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Card, Disclosure, Divider, Icon, LineChip, Press, SectionHeader, T } from '@/components/ui';
 import { fetchStationLive, type StationLive } from '@/lib/api';
 import { getDetails } from '@/lib/details';
-import { hm } from '@/lib/format';
+import { hm, shortPlatform } from '@/lib/format';
 import { directionsAt, getLine, lineLabel, linesOf, stationByCode, titleTowards } from '@/lib/network';
 import { usePlanner } from '@/store/planner';
 import { useSettings } from '@/store/settings';
@@ -62,21 +62,6 @@ export default function StationScreen() {
 
   type Section = { title: string; detail?: string; tone?: 'danger'; body: React.ReactNode };
   const sections: Section[] = [];
-  if (d?.platforms?.length)
-    sections.push({
-      title: 'Platforms',
-      detail: String(d.platforms.length),
-      body: d.platforms.map((p) => (
-        <Item
-          key={p.name}
-          title={p.name.replace(/\s*\(.*\)/, '')}
-          sub={`Towards ${[p.to, p.to2]
-            .filter(Boolean)
-            .map((x) => stationByCode.get(x!)?.name ?? x)
-            .join(' / ')}${/\(Airport Express\)/.test(p.name) ? ' (Airport Express)' : ''}`}
-        />
-      )),
-    });
   if (gates.length)
     sections.push({
       title: 'Gates',
@@ -263,7 +248,7 @@ export default function StationScreen() {
                         </T>
                         {dir.timing.platform ? (
                           <T v="caption" faint numberOfLines={1}>
-                            {dir.timing.platform}
+                            {shortPlatform(dir.timing.platform)}
                           </T>
                         ) : null}
                       </View>

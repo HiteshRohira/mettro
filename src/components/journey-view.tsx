@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Icon, LineChip, Press, T } from '@/components/ui';
-import { fmtDuration, hm } from '@/lib/format';
+import { fmtDuration, hm, shortPlatform } from '@/lib/format';
 import { getLine, getStation, lineLabel } from '@/lib/network';
 import type { Journey, Leg } from '@/lib/router';
 import { useTheme } from '@/theme';
@@ -77,14 +77,14 @@ function LegBlock({ leg, first, last }: { leg: Leg; first: boolean; last: boolea
             <LineChip line={line} label={lineLabel(line)} />
             {leg.platform ? (
               <T v="label" dim>
-                {leg.platform}
+                {shortPlatform(leg.platform)}
               </T>
             ) : null}
           </View>
           <T v="body">Towards {leg.towards}</T>
           <Press accessibilityState={{ expanded: open }} disabled={!mids.length} onPress={() => setOpen((v) => !v)} style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6 }} hitSlop={6}>
             <T v="caption" faint>
-              {stops} stop{stops === 1 ? '' : 's'} · {fmtDuration(leg.durationS)}
+              {stops} stop{stops === 1 ? '' : 's'}{first && last ? '' : ` · ${fmtDuration(leg.durationS)}`}
             </T>
             {mids.length ? <Icon name={open ? 'chevron.up' : 'chevron.down'} size={10} color={c.text3} /> : null}
           </Press>

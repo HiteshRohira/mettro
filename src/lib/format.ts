@@ -45,3 +45,6 @@ export function fmtKm(km: number) {
 export function walkMin(km: number) {
   return Math.max(1, Math.round((km * 1.2 * 60) / 5));
 }
+
+/** "Platform No. 2" -> "Platform 2" */
+export const shortPlatform = (p: string) => p.replace(/Platform No\.?\s*/i, 'Platform ');

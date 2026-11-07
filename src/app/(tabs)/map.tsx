@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Divider, Icon, LineDots, Press, T } from '@/components/ui';
+import { Card, Icon, LineDots, Press, T } from '@/components/ui';
 import { fmtKm, walkMin } from '@/lib/format';
 import { EDGES, getStation, haversineKm, LINES, lineById, lineLabel, STATIONS, stationColors, type Station } from '@/lib/network';
 import { locate, useNearest } from '@/lib/useLocation';
@@ -67,7 +67,8 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const [sel, setSel] = useState<Station | null>(null);
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  // Lines the user picked. Empty = the whole network.
+  const [only, setOnly] = useState<string[]>([]);
   const [showFilter, setShowFilter] = useState(false);
   const { list: nearby, coords } = useNearest(1, false);
   const nearest = nearby[0] && nearby[0].km < 40 ? nearby[0] : null;
@@ -81,15 +82,36 @@ export default function MapScreen() {
     mapRef.current?.animateToRegion({ latitude: s.lat - 0.004, longitude: s.lng, latitudeDelta: 0.04, longitudeDelta: 0.04 }, 300);
   };
 
-  const toggleLine = (id: string) => {
+  const groupOf = (id: string) => {
     const l = lineById.get(id)!;
-    const group = LINES.filter((x) => x.color === l.color).map((x) => x.id);
-    setHidden((h) => {
-      const n = new Set(h);
-      const isHidden = group.every((g) => n.has(g));
-      group.forEach((g) => (isHidden ? n.delete(g) : n.add(g)));
-      return n;
+    return LINES.filter((x) => x.color === l.color).map((x) => x.id);
+  };
+  const hidden = useMemo(() => {
+    if (!only.length) return new Set<string>();
+    const shown = new Set(only.flatMap(groupOf));
+    return new Set(LINES.filter((l) => !shown.has(l.id)).map((l) => l.id));
+  }, [only]);
+
+  // Frame the chosen lines so their ends are on screen.
+  const frame = (ids: string[]) => {
+    if (!ids.length) return mapRef.current?.animateToRegion(DELHI, 300);
+    const codes = new Set(ids.flatMap(groupOf).flatMap((id) => STATIONS.filter((st) => st.lines.includes(id)).map((st) => st.code)));
+    const coords = [...codes].map((code) => ({ latitude: getStation(code).lat, longitude: getStation(code).lng }));
+    mapRef.current?.fitToCoordinates(coords, {
+      edgePadding: { top: insets.top + 220, right: 60, bottom: insets.bottom + 160, left: 40 },
+      animated: true,
     });
+  };
+
+  const pickLine = (id: string) => {
+    const next = only.includes(id) ? only.filter((x) => x !== id) : [...only, id];
+    setOnly(next);
+    setSel(null);
+    frame(next);
+  };
+  const showAll = () => {
+    setOnly([]);
+    frame([]);
   };
 
   const selKm = sel && coords ? fmtKm(haversineKm(coords.lat, coords.lng, sel.lat, sel.lng)) : null;
@@ -114,23 +136,18 @@ export default function MapScreen() {
       {showFilter ? (
         <Card style={{ position: 'absolute', top: insets.top + 10, left: 16, right: 16, gap: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <T v="h3" style={{ flex: 1 }}>Visible lines</T>
-            {hidden.size ? <Press onPress={() => setHidden(new Set())} hitSlop={8}><T v="label" color={c.accent}>Show all</T></Press> : null}
-            <Press onPress={() => setShowFilter(false)} hitSlop={8} accessibilityLabel="Close filters"><Icon name="xmark" size={14} color={c.text2} /></Press>
+            <T v="h3" style={{ flex: 1 }}>
+              Show lines
+            </T>
+            <Press onPress={() => setShowFilter(false)} hitSlop={10} accessibilityLabel="Close">
+              <Icon name="xmark" size={14} color={c.text2} />
+            </Press>
           </View>
-          <Divider />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {legend.map((l) => {
-              const off = hidden.has(l.id);
-              return (
-                <Press key={l.id} onPress={() => toggleLine(l.id)} accessibilityState={{ selected: !off }}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, minHeight: 36, borderRadius: radius.pill, backgroundColor: off ? c.bg : c.surface2 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: off ? c.border : l.color }} />
-                  <T v="label" color={off ? c.text3 : c.text}>{lineLabel(l).replace(' Line', '')}</T>
-                  {!off ? <Icon name="checkmark" size={9} color={c.text2} /> : null}
-                </Press>
-              );
-            })}
+            <FilterChip label="All lines" on={!only.length} onPress={showAll} />
+            {legend.map((l) => (
+              <FilterChip key={l.id} label={lineLabel(l).replace(' Line', '')} color={l.color} on={only.includes(l.id)} onPress={() => pickLine(l.id)} />
+            ))}
           </View>
         </Card>
       ) : null}
@@ -169,12 +186,12 @@ export default function MapScreen() {
             borderColor: c.border,
           }}>
           <Icon
-            name={hidden.size ? 'line.3.horizontal.decrease.circle.fill' : 'line.3.horizontal.decrease'}
+            name={only.length ? 'line.3.horizontal.decrease.circle.fill' : 'line.3.horizontal.decrease'}
             size={17}
-            color={hidden.size || showFilter ? c.accent : c.text}
+            color={only.length || showFilter ? c.accent : c.text}
           />
         </Press>
-        <Press onPress={() => { setSel(null); mapRef.current?.animateToRegion(DELHI, 300); }} accessibilityLabel="Show full network"
+        <Press onPress={() => { setSel(null); frame(only); }} accessibilityLabel={only.length ? 'Fit selected lines' : 'Show full network'}
           style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5, borderColor: c.border }}>
           <Icon name="arrow.up.left.and.arrow.down.right" size={16} />
         </Press>
@@ -240,5 +257,28 @@ export default function MapScreen() {
         ) : null}
       </View>
     </View>
+  );
+}
+
+function FilterChip({ label, color, on, onPress }: { label: string; color?: string; on: boolean; onPress: () => void }) {
+  const { c } = useTheme();
+  return (
+    <Press
+      onPress={onPress}
+      accessibilityState={{ selected: on }}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 7,
+        paddingHorizontal: 12,
+        minHeight: 36,
+        borderRadius: radius.pill,
+        backgroundColor: on ? c.ink : c.surface2,
+      }}>
+      {color ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} /> : null}
+      <T v="label" color={on ? c.onInk : c.text}>
+        {label}
+      </T>
+    </Press>
   );
 }

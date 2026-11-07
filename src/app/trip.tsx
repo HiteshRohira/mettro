@@ -32,6 +32,7 @@ export default function TripScreen() {
   }
 
   const p = computeProgress(trip, now);
+  const hasHidden = p.idx > 0 || p.pts.length > p.idx + 4;
   const j = trip.journey;
   const leg = j.legs[Math.min(p.legIndex, j.legs.length - 1)];
   const line = getLine(leg.lineId);
@@ -54,7 +55,7 @@ export default function TripScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 110 }}>
         <Card pad={24}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 22 }}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: line.color }} />
@@ -94,7 +95,7 @@ export default function TripScreen() {
             .join(' · ')}
         </T>
 
-        <SectionHeader title={showAll ? 'Your route' : 'Coming up'} action={showAll ? 'Show less' : 'All stops'} onAction={() => setShowAll((v) => !v)} />
+        <SectionHeader title={showAll ? 'Your route' : 'Coming up'} />
         <Card pad={16}>
           {p.pts.map((pt, i) => {
             if (!showAll && (i < p.idx || i > p.idx + 3)) return null;
@@ -156,6 +157,16 @@ export default function TripScreen() {
               </Press>
             );
           })}
+          {hasHidden || showAll ? (
+            <Press
+              onPress={() => setShowAll((v) => !v)}
+              hitSlop={6}
+              accessibilityLabel={showAll ? 'Show fewer stops' : 'Show all stops'}
+              accessibilityState={{ expanded: showAll }}
+              style={{ alignItems: 'center', justifyContent: 'center', height: 28, marginTop: -8 }}>
+              <Icon name={showAll ? 'chevron.up' : 'chevron.down'} size={14} color={c.text3} />
+            </Press>
+          ) : null}
         </Card>
         {showAll && p.phase !== 'arrived' ? (
           <T v="caption" faint style={{ marginTop: 8, paddingHorizontal: 4 }}>
@@ -163,6 +174,8 @@ export default function TripScreen() {
           </T>
         ) : null}
 
+      </ScrollView>
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 10, paddingBottom: insets.bottom + 10, backgroundColor: c.bg }}>
         {p.phase === 'arrived' ? (
           <Button
             title="Done"
@@ -170,12 +183,11 @@ export default function TripScreen() {
               await stopTrip();
               router.back();
             }}
-            style={{ marginTop: 16 }}
           />
         ) : (
-          <Button title="End trip" kind="ghost" onPress={end} style={{ marginTop: 20 }} />
+          <Button title="End trip" kind="secondary" onPress={end} />
         )}
-      </ScrollView>
+      </View>
     </View>
   );
 }

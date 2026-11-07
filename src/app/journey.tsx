@@ -93,7 +93,7 @@ export default function JourneyScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: 'Route' }} />
+      <Stack.Screen options={{ title: '' }} />
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 110 }}>
         {!j ? (
           loading ? (
