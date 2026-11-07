@@ -20,7 +20,16 @@ export function TripBanner() {
   const fg = c.text;
   return (
     <Press onPress={() => router.push('/trip')} style={{ marginBottom: 12 }}>
-      <View style={{ backgroundColor: c.surface, borderRadius: radius.lg, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <View
+        style={{
+          backgroundColor: c.surface,
+          borderRadius: radius.lg,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+        }}>
         <View style={{ width: 4, height: 36, borderRadius: 2, backgroundColor: line.color }} />
         <View style={{ flex: 1 }}>
           <T v="bodyStrong" color={fg} numberOfLines={1}>

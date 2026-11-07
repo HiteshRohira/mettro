@@ -28,7 +28,10 @@ export type TripActivityProps = {
   stopsLeft: number;
   progress: number; // 0..1
   action: string; // "Change at Rajiv Chowk for Blue Line" / "Get off at Patel Chowk"
-  phase: 'riding' | 'transfer' | 'arriving' | 'arrived';
+  phase: 'waiting' | 'riding' | 'transfer' | 'arriving' | 'arrived';
+  title: string; // headline, composed by the app
+  etaText: string; // arrival clock (IST), formatted by the app
+  departText: string; // first departure clock (IST)
 };
 
 const TripActivity = (p: TripActivityProps, env: LiveActivityEnvironment) => {
@@ -40,11 +43,9 @@ const TripActivity = (p: TripActivityProps, env: LiveActivityEnvironment) => {
   const nextDate = new Date(Math.max(p.nextAt, now + 1000));
   const startDate = new Date(Math.min(p.start, now));
   const arrived = p.phase === 'arrived';
-  const pad2 = (n: number) => (n < 10 ? '0' + n : '' + n);
-  const etaD = new Date(p.eta);
-  const etaClock = pad2(etaD.getHours()) + ':' + pad2(etaD.getMinutes());
+  const etaClock = p.etaText;
   const stopsLabel = p.stopsLeft === 1 ? '1 stop' : p.stopsLeft + ' stops';
-  const headline = arrived ? 'Arrived at ' + p.dest : p.phase === 'arriving' ? 'Next: ' + p.next + ' — get off' : 'Next: ' + p.next;
+  const headline = p.title;
 
   const chip = (
     <Text
@@ -103,7 +104,7 @@ const TripActivity = (p: TripActivityProps, env: LiveActivityEnvironment) => {
       <Image systemName="checkmark.circle.fill" color={accent} size={14} />
     ) : (
       <Text
-        timerInterval={{ lower: new Date(Math.min(now, p.eta - 1000)), upper: etaDate }}
+        timerInterval={{ lower: new Date(Math.min(now, p.nextAt - 1000)), upper: nextDate }}
         countsDown
         modifiers={[font({ size: 13, weight: 'semibold' }), foregroundStyle(accent), monospacedDigit(), frame({ width: 44 })]}
       />

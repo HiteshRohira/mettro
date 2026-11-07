@@ -82,15 +82,24 @@ function LegBlock({ leg, first, last }: { leg: Leg; first: boolean; last: boolea
             ) : null}
           </View>
           <T v="body">Towards {leg.towards}</T>
-          <Press accessibilityState={{ expanded: open }} disabled={!mids.length} onPress={() => setOpen((v) => !v)} style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6 }} hitSlop={6}>
+          <Press
+            accessibilityState={{ expanded: open }}
+            disabled={!mids.length}
+            onPress={() => setOpen((v) => !v)}
+            style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            hitSlop={6}>
             <T v="caption" faint>
-              {stops} stop{stops === 1 ? '' : 's'}{first && last ? '' : ` · ${fmtDuration(leg.durationS)}`}
+              {stops} stop{stops === 1 ? '' : 's'}
+              {first && last ? '' : ` · ${fmtDuration(leg.durationS)}`}
             </T>
             {mids.length ? <Icon name={open ? 'chevron.up' : 'chevron.down'} size={10} color={c.text3} /> : null}
           </Press>
           {open
             ? mids.map((code) => (
-                <Press key={code} onPress={() => router.push({ pathname: '/station/[code]', params: { code } })} style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: -26 }}>
+                <Press
+                  key={code}
+                  onPress={() => router.push({ pathname: '/station/[code]', params: { code } })}
+                  style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: -26 }}>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.surface, borderWidth: 2, borderColor: line.color }} />
                   <T v="caption" dim style={{ marginLeft: 14, flex: 1 }}>
                     {getStation(code).name}
@@ -123,7 +132,8 @@ function TransferBlock({ from, to }: { from: Leg; to: Leg }) {
         <View style={{ flex: 1, paddingLeft: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Icon name="figure.walk" size={15} color={c.text2} />
           <T v="caption" dim style={{ flex: 1 }}>
-            Change to {lineLabel(b)}{to.depart && from.arrive ? ` · departs ${hm(to.depart)}` : ''}
+            Change to {lineLabel(b)}
+            {to.depart && from.arrive ? ` · departs ${hm(to.depart)}` : ''}
           </T>
         </View>
       </View>

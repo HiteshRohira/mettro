@@ -38,6 +38,8 @@ export default function TripScreen() {
   const line = getLine(leg.lineId);
   const minsToNext = Math.max(0, Math.round((p.nextAt - now) / 60000));
   const minsLeft = Math.max(0, Math.round((p.eta - now) / 60000));
+  const waiting = p.phase === 'waiting';
+  const minsToDepart = Math.max(0, Math.round((p.departAt - now) / 60000));
 
   const end = () =>
     Alert.alert('End trip?', 'This stops tracking and removes the Live Activity.', [
@@ -58,14 +60,20 @@ export default function TripScreen() {
         <Card pad={24}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 22 }}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: line.color }} />
-            <T v="label" dim style={{ flex: 1 }}>{lineLabel(line)} · {leg.towards}</T>
+            <T v="label" dim style={{ flex: 1 }}>
+              {lineLabel(line)} · {leg.towards}
+            </T>
           </View>
-          <T v="label" dim>{p.phase === 'arrived' ? 'You’ve arrived' : 'Next stop'}</T>
+          <T v="label" dim>
+            {p.phase === 'arrived' ? 'You’ve arrived' : waiting ? 'Your train' : 'Next stop'}
+          </T>
           <T v="display" style={{ marginTop: 6 }}>
-            {getStation(p.phase === 'arrived' ? j.to : p.next?.code ?? j.to).name}
+            {waiting ? fmtClock(p.departAt) : getStation(p.phase === 'arrived' ? j.to : (p.next?.code ?? j.to)).name}
           </T>
           {p.phase !== 'arrived' ? (
-            <T v="body" dim style={{ marginTop: 8 }}>{minsToNext <= 0 ? 'Arriving now' : `In about ${minsToNext} min`}</T>
+            <T v="body" dim style={{ marginTop: 8 }}>
+              {waiting ? `Leaves ${getStation(p.current.code).name} in ${minsToDepart} min` : minsToNext <= 0 ? 'Arriving now' : `In about ${minsToNext} min`}
+            </T>
           ) : null}
           <View style={{ height: 3, borderRadius: 2, marginTop: 24, marginBottom: 20, backgroundColor: c.surface2, overflow: 'hidden' }}>
             <View style={{ height: 3, width: `${Math.round(p.progress * 100)}%`, backgroundColor: line.color }} />
@@ -161,9 +169,18 @@ export default function TripScreen() {
             Tap a stop to correct your position.
           </T>
         ) : null}
-
       </ScrollView>
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 10, paddingBottom: insets.bottom + 10, backgroundColor: c.bg }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          paddingHorizontal: 20,
+          paddingTop: 10,
+          paddingBottom: insets.bottom + 10,
+          backgroundColor: c.bg,
+        }}>
         {p.phase === 'arrived' ? (
           <Button
             title="Done"

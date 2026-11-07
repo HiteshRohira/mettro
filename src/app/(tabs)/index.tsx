@@ -7,9 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ServiceAlerts } from '@/components/status';
 import { TripBanner } from '@/components/trip-banner';
 import { Button, Card, Divider, Icon, LineDots, Press, SectionHeader, T } from '@/components/ui';
-import { fmtClock, hm, hmToMinutes, walkMin } from '@/lib/format';
+import { fmtClock, hm, walkMin } from '@/lib/format';
 import { directionsAt, getStation, stationColors, titleTowards } from '@/lib/network';
 import { useNearest } from '@/lib/useLocation';
+import { serviceMinutes, timetableMinutes } from '@/lib/time';
 import { useNow } from '@/lib/useNow';
 import { usePlanner } from '@/store/planner';
 import { useSettings } from '@/store/settings';
@@ -102,8 +103,15 @@ export default function PlanScreen() {
               <Icon name={showTime ? 'chevron.up' : 'chevron.down'} size={10} color={c.text3} />
             </Press>
             {when ? (
-              <Press onPress={() => { set({ when: null }); setShowTime(false); }} hitSlop={8}>
-                <T v="label" color={c.accent}>Reset</T>
+              <Press
+                onPress={() => {
+                  set({ when: null });
+                  setShowTime(false);
+                }}
+                hitSlop={8}>
+                <T v="label" color={c.accent}>
+                  Reset
+                </T>
               </Press>
             ) : null}
           </View>
@@ -119,7 +127,13 @@ export default function PlanScreen() {
               </Host>
             </View>
           ) : null}
-          <Button title="Find route" icon="arrow.right" onPress={() => go()} disabled={!from || !to || from === to} style={{ margin: 12, marginTop: 0, height: 52, borderRadius: radius.lg }} />
+          <Button
+            title="Find route"
+            icon="arrow.right"
+            onPress={() => go()}
+            disabled={!from || !to || from === to}
+            style={{ margin: 12, marginTop: 0, height: 52, borderRadius: radius.lg }}
+          />
         </Card>
 
         {shortcuts.length ? (
@@ -127,7 +141,10 @@ export default function PlanScreen() {
             {shortcuts.map((s) => (
               <Press
                 key={s!.key}
-                onPress={() => { if (from) go(from, s!.code); else set({ to: s!.code }); }}
+                onPress={() => {
+                  if (from) go(from, s!.code);
+                  else set({ to: s!.code });
+                }}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -156,8 +173,12 @@ export default function PlanScreen() {
                   <Press onPress={() => go(r.from, r.to)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 12 }}>
                     <Icon name="arrow.up.right" size={16} color={c.text3} />
                     <View style={{ flex: 1, gap: 3 }}>
-                      <T v="bodyStrong" numberOfLines={2}>{getStation(r.to).name}</T>
-                      <T v="caption" dim numberOfLines={1}>From {getStation(r.from).name}</T>
+                      <T v="bodyStrong" numberOfLines={2}>
+                        {getStation(r.to).name}
+                      </T>
+                      <T v="caption" dim numberOfLines={1}>
+                        From {getStation(r.from).name}
+                      </T>
                     </View>
                   </Press>
                 </View>
@@ -189,8 +210,13 @@ export default function PlanScreen() {
 function StationField({ value, placeholder, hint, onPress }: { value: string | null; placeholder: string; hint?: 'location.fill'; onPress: () => void }) {
   const { c } = useTheme();
   return (
-    <Press onPress={onPress} style={{ minHeight: 80, justifyContent: 'center', paddingRight: 4, paddingVertical: 12 }} accessibilityLabel={`${placeholder}${value ? ` ${getStation(value).name}` : ''}`}>
-      <T v="caption" dim style={{ marginBottom: 3 }}>{placeholder}</T>
+    <Press
+      onPress={onPress}
+      style={{ minHeight: 80, justifyContent: 'center', paddingRight: 4, paddingVertical: 12 }}
+      accessibilityLabel={`${placeholder}${value ? ` ${getStation(value).name}` : ''}`}>
+      <T v="caption" dim style={{ marginBottom: 3 }}>
+        {placeholder}
+      </T>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         <T v="h2" numberOfLines={2} color={value ? c.text : c.text3} style={{ flexShrink: 1 }}>
           {value ? getStation(value).name : 'Choose station'}
@@ -250,12 +276,11 @@ function NearbySection({
 function useLastTrainWarning(code: string, now?: number) {
   return useMemo(() => {
     if (now == null) return null;
-    const d = new Date(now);
-    let nowMin = d.getHours() * 60 + d.getMinutes();
-    if (nowMin < 4 * 60) nowMin += 24 * 60;
+    // service-day minutes in IST (00:00–02:59 count as 24:00+), whatever the phone's timezone
+    const nowMin = serviceMinutes(now);
     const lasts = directionsAt(code)
       .filter((x) => x.timing.last)
-      .map((x) => ({ min: hmToMinutes(x.timing.last)!, x }))
+      .map((x) => ({ min: timetableMinutes(x.timing.last)!, x }))
       .sort((a, b) => a.min - b.min);
     const soonest = lasts.find((l) => l.min >= nowMin);
     if (!soonest || soonest.min - nowMin > 60) return null;
