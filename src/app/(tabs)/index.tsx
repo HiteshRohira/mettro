@@ -286,7 +286,7 @@ function StationRow({ code, walk, now }: { code: string; walk?: number; now?: nu
       </View>
       {walk != null ? (
         <T v="label" faint>
-          {walk} min walk
+          {walk} min
         </T>
       ) : null}
     </Press>

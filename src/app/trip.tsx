@@ -37,8 +37,7 @@ export default function TripScreen() {
   const leg = j.legs[Math.min(p.legIndex, j.legs.length - 1)];
   const line = getLine(leg.lineId);
   const minsToNext = Math.max(0, Math.round((p.nextAt - now) / 60000));
-  const gpsFresh = trip.gpsIdxAt && now - trip.gpsIdxAt < 5 * 60e3;
-  const delayMin = Math.round(trip.delayMs / 60000);
+  const minsLeft = Math.max(0, Math.round((p.eta - now) / 60000));
 
   const end = () =>
     Alert.alert('End trip?', 'This stops tracking and removes the Live Activity.', [
@@ -72,28 +71,17 @@ export default function TripScreen() {
             <View style={{ height: 3, width: `${Math.round(p.progress * 100)}%`, backgroundColor: line.color }} />
           </View>
           {p.phase !== 'arrived' ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Icon name={p.phase === 'transfer' ? 'arrow.triangle.branch' : 'arrow.down.right'} size={18} color={c.text2} />
-              <T v="bodyStrong" style={{ flex: 1 }}>{p.action}</T>
+            // One line: what to do, and when it's over. No GPS/timetable status — that's the engine's business.
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <T v="bodyStrong" style={{ flex: 1 }} numberOfLines={2}>
+                {p.action}
+              </T>
+              <T v="label" dim style={{ fontVariant: ['tabular-nums'] }}>
+                {minsLeft} min · {fmtClock(p.eta)}
+              </T>
             </View>
           ) : null}
         </Card>
-
-        {p.phase !== 'arrived' ? <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginTop: 20, gap: 12 }}>
-          <View style={{ flex: 1, gap: 4 }}>
-            <T v="caption" dim>{getStation(j.to).name}</T>
-            <T v="h2">Arrive {fmtClock(p.eta)}</T>
-          </View>
-          <T v="label" dim>{p.stopsLeft} stop{p.stopsLeft === 1 ? '' : 's'} left</T>
-        </View> : null}
-        <T v="caption" faint style={{ marginTop: 10, paddingHorizontal: 4 }}>
-          {[
-            gpsFresh ? 'Tracking by GPS' : 'Following the timetable',
-            Math.abs(delayMin) >= 2 && p.phase !== 'arrived' ? (delayMin > 0 ? `${delayMin} min behind` : `${-delayMin} min ahead`) : '',
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </T>
 
         <SectionHeader title={showAll ? 'Your route' : 'Coming up'} />
         <Card pad={16}>

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { memo, useMemo, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Text as RNText, View } from 'react-native';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -45,6 +45,7 @@ const Stations = memo(function Stations({ onSelect, hidden }: { onSelect: (s: St
           coordinate={{ latitude: s.lat, longitude: s.lng }}
           tracksViewChanges={false}
           anchor={{ x: 0.5, y: 0.5 }}
+          zIndex={2}
           onPress={() => onSelect(s)}>
           <View
             style={{
@@ -62,6 +63,46 @@ const Stations = memo(function Stations({ onSelect, hidden }: { onSelect: (s: St
   );
 });
 
+// Names are separate, non-interactive markers under the dots. The view is square and
+// centred on the station because iOS sizes custom annotation frames square: a wide,
+// short view would be drawn off-centre and drag the dot off its line.
+const LABEL_BOX = 132;
+const Labels = memo(function Labels({ codes, dark }: { codes: Set<string>; dark: boolean }) {
+  return (
+    <>
+      {[...codes].map((code) => {
+        const s = getStation(code);
+        return (
+          <Marker
+            key={code}
+            coordinate={{ latitude: s.lat, longitude: s.lng }}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
+            tappable={false}
+            zIndex={1}>
+            <View pointerEvents="none" style={{ width: LABEL_BOX, height: LABEL_BOX, alignItems: 'center' }}>
+              <RNText
+                numberOfLines={1}
+                style={{
+                  marginTop: LABEL_BOX / 2 + 8,
+                  maxWidth: LABEL_BOX,
+                  fontFamily: 'Inter-SemiBold',
+                  fontSize: 11,
+                  color: dark ? '#F3F4F6' : '#0E1116',
+                  textShadowColor: dark ? '#0A0C10' : '#FFFFFF',
+                  textShadowRadius: 3,
+                  textShadowOffset: { width: 0, height: 0 },
+                }}>
+                {s.name}
+              </RNText>
+            </View>
+          </Marker>
+        );
+      })}
+    </>
+  );
+});
+
 export default function MapScreen() {
   const { c, dark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -70,6 +111,8 @@ export default function MapScreen() {
   // Lines the user picked. Empty = the whole network.
   const [only, setOnly] = useState<string[]>([]);
   const [showFilter, setShowFilter] = useState(false);
+  const [region, setRegion] = useState<Region>(DELHI);
+  const [panelH, setPanelH] = useState(0);
   const { list: nearby, coords } = useNearest(1, false);
   const nearest = nearby[0] && nearby[0].km < 40 ? nearby[0] : null;
   const legend = useMemo(
@@ -92,13 +135,32 @@ export default function MapScreen() {
     return new Set(LINES.filter((l) => !shown.has(l.id)).map((l) => l.id));
   }, [only]);
 
+  // Names only where they're readable: every on-screen station once zoomed in,
+  // plus the terminals of picked lines at any zoom (where does this line go?).
+  const labeled = useMemo(() => {
+    const out = new Set<string>();
+    if (only.length) {
+      for (const id of only.flatMap(groupOf)) {
+        const l = lineById.get(id)!;
+        [l.stations[0], l.stations[l.stations.length - 1], ...l.branches.map((b) => b[b.length - 1])].forEach((code) => out.add(code));
+      }
+    }
+    if (region.latitudeDelta < 0.09) {
+      const { latitude: la, longitude: lo, latitudeDelta: dla, longitudeDelta: dlo } = region;
+      for (const st of STATIONS) {
+        if (Math.abs(st.lat - la) < dla / 2 && Math.abs(st.lng - lo) < dlo / 2 && st.lines.some((l) => !hidden.has(l))) out.add(st.code);
+      }
+    }
+    return out;
+  }, [only, region, hidden]);
+
   // Frame the chosen lines so their ends are on screen.
   const frame = (ids: string[]) => {
     if (!ids.length) return mapRef.current?.animateToRegion(DELHI, 300);
     const codes = new Set(ids.flatMap(groupOf).flatMap((id) => STATIONS.filter((st) => st.lines.includes(id)).map((st) => st.code)));
     const coords = [...codes].map((code) => ({ latitude: getStation(code).lat, longitude: getStation(code).lng }));
     mapRef.current?.fitToCoordinates(coords, {
-      edgePadding: { top: insets.top + 220, right: 60, bottom: insets.bottom + 160, left: 40 },
+      edgePadding: { top: insets.top + 60, right: 70, bottom: insets.bottom + 110 + panelH, left: 50 },
       animated: true,
     });
   };
@@ -126,15 +188,17 @@ export default function MapScreen() {
         showsCompass={false}
         showsPointsOfInterests={false}
         userInterfaceStyle={dark ? 'dark' : 'light'}
+        onRegionChangeComplete={setRegion}
         onPress={(e) => {
           if (e.nativeEvent.action !== 'marker-press') setSel(null);
         }}>
         <Lines hidden={hidden} />
         <Stations onSelect={select} hidden={hidden} />
+        <Labels codes={labeled} dark={dark} />
       </MapView>
 
       {showFilter ? (
-        <Card style={{ position: 'absolute', top: insets.top + 10, left: 16, right: 16, gap: 14 }}>
+        <Card onLayout={(e) => setPanelH(e.nativeEvent.layout.height)} style={{ position: 'absolute', bottom: insets.bottom + 90, left: 12, right: 12, gap: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <T v="h3" style={{ flex: 1 }}>
               Show lines
@@ -152,7 +216,7 @@ export default function MapScreen() {
         </Card>
       ) : null}
 
-      <View style={{ position: 'absolute', right: 12, bottom: insets.bottom + 100 + (sel ? 120 : nearest ? 64 : 0), gap: 8 }}>
+      <View style={{ position: 'absolute', right: 12, bottom: insets.bottom + 100 + (showFilter ? panelH : sel ? 120 : nearest ? 64 : 0), gap: 8 }}>
         <Press
           accessibilityLabel="Centre on my location"
           onPress={async () => {
@@ -198,7 +262,7 @@ export default function MapScreen() {
       </View>
 
       <View style={{ position: 'absolute', left: 12, right: 12, bottom: insets.bottom + 90 }}>
-        {sel ? (
+        {showFilter ? null : sel ? (
           <Card style={{ gap: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Press
@@ -250,7 +314,7 @@ export default function MapScreen() {
                 {nearest.station.name}
               </T>
               <T v="label" faint>
-                {walkMin(nearest.km)} min walk
+                {walkMin(nearest.km)} min
               </T>
             </Card>
           </Press>

@@ -3,7 +3,7 @@ import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
 import { after } from 'expo-widgets';
 
-import { getLine, getStation, haversineKm, lineLabel, onLineColor } from '@/lib/network';
+import { getLine, getStation, lineLabel, onLineColor } from '@/lib/network';
 import { INTERCHANGE_SECONDS, type Journey } from '@/lib/router';
 import { useSettings } from '@/store/settings';
 import { useTrip, type Fix, type Trip } from '@/store/trip';
@@ -84,12 +84,11 @@ export function computeProgress(trip: Trip, now = Date.now()): Progress {
   const j = trip.journey;
   const pts = buildTimeline(j, trip.startedAt);
   const last = pts.length - 1;
-  let tIdx = 0;
-  for (let i = 0; i < pts.length; i++) if (pts[i].at + trip.delayMs <= now) tIdx = i;
-  // If GPS confirmed a station recently, don't let the clock run more than 1 stop ahead of it.
-  let idx = Math.max(trip.idx, tIdx);
-  if (trip.gpsIdxAt && now - trip.gpsIdxAt < 4 * 60 * 1000) idx = Math.min(idx, trip.idx + 1);
-  idx = Math.min(Math.max(idx, trip.idx), last);
+  // GPS is the source of truth: every good fix rewrites `delayMs` so the timeline passes
+  // through where GPS put us. Between fixes (e.g. underground) the clock carries that
+  // offset forward on the timetable until GPS returns.
+  let idx = 0;
+  for (let i = 0; i < pts.length; i++) if (pts[i].at + trip.delayMs <= now) idx = i;
   const current = pts[idx];
   const next = idx < last ? pts[idx + 1] : null;
   const eta = pts[last].at + trip.delayMs;
@@ -236,36 +235,61 @@ if (!TaskManager.isTaskDefined(TRIP_LOCATION_TASK)) {
   });
 }
 
-/** Snap a GPS fix to the route. */
+const GOOD_FIX_M = 150; // worse than this (typical underground / indoor) → ignore, keep dead-reckoning
+const ON_ROUTE_KM = 0.5; // further than this from the route → not on the train, ignore
+const AT_STATION_KM = 0.2;
+
+/** Closest point on segment a→b to p, as fraction along it and distance (flat-earth approx; fine at metro scale). */
+function project(p: { lat: number; lng: number }, a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const kx = 111.32 * Math.cos((p.lat * Math.PI) / 180);
+  const ky = 110.57;
+  const ax = a.lng * kx, ay = a.lat * ky, bx = b.lng * kx, by = b.lat * ky, px = p.lng * kx, py = p.lat * ky;
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const f = len2 ? Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+  const km = Math.hypot(px - (ax + f * dx), py - (ay + f * dy));
+  return { f, km, segKm: Math.sqrt(len2) };
+}
+
+/**
+ * Place a GPS fix on the route and re-time the trip around it.
+ * - Between stations: the offset is set so the timeline is exactly at that point now.
+ * - At a station (train may be dwelling): the offset is nudged just enough that we're
+ *   "at station i" — past its time, not yet at the next one.
+ */
 export async function onFix(fix: Fix) {
   const st = useTrip.getState();
   const trip = st.trip;
   if (!trip || trip.ended) return;
-  const patch: Partial<Trip> = { lastFix: fix };
-  if (fix.acc <= 350) {
-    const pts = buildTimeline(trip.journey, trip.startedAt);
-    let best = -1;
-    let bestKm = 0.45;
-    for (let i = Math.max(0, trip.idx - 1); i < pts.length; i++) {
-      const s = getStation(pts[i].code);
-      const km = haversineKm(fix.lat, fix.lng, s.lat, s.lng);
-      if (km < bestKm) {
-        bestKm = km;
-        best = i;
-      }
-    }
-    if (best >= trip.idx) {
-      const delay = Math.min(60 * 60e3, Math.max(-60 * 60e3, fix.at - pts[best].at));
-      patch.idx = best;
-      patch.gpsIdxAt = Date.now();
-      // only adjust the delay if we're dwelling near the station (close fix)
-      if (bestKm < 0.3) patch.delayMs = delay;
-      st.patch(patch);
-      await tick();
-      return;
-    }
+  if (fix.acc > GOOD_FIX_M) return st.patch({ lastFix: fix });
+
+  const pts = buildTimeline(trip.journey, trip.startedAt);
+  const last = pts.length - 1;
+  const from = Math.max(0, trip.idx - 2);
+  let best: { i: number; f: number; km: number; segKm: number } | null = null;
+  for (let i = from; i < last; i++) {
+    const r = project(fix, getStation(pts[i].code), getStation(pts[i + 1].code));
+    // prefer the earliest segment among near-ties so a route that doubles back can't jump ahead
+    if (!best || r.km < best.km - 0.05) best = { i, ...r };
   }
-  st.patch(patch);
+  if (!best || best.km > ON_ROUTE_KM) return st.patch({ lastFix: fix });
+
+  const { i, f, segKm } = best;
+  const kmFromA = f * segKm;
+  const kmToB = (1 - f) * segKm;
+  const now = fix.at;
+  let delay: number;
+  if (kmFromA < AT_STATION_KM || kmToB < AT_STATION_KM) {
+    const at = kmFromA < AT_STATION_KM ? i : i + 1;
+    const lo = at < last ? now - pts[at + 1].at + 1000 : -Infinity; // not yet at the next stop
+    const hi = at > 0 ? now - pts[at].at : Infinity; // already reached this one
+    delay = Math.min(hi, Math.max(lo, trip.delayMs));
+  } else {
+    delay = now - (pts[i].at + f * (pts[i + 1].at - pts[i].at));
+  }
+  delay = Math.min(60 * 60e3, Math.max(-60 * 60e3, delay));
+  st.patch({ lastFix: fix, delayMs: delay, gpsIdxAt: Date.now() });
+  await tick();
 }
 
 /** Recompute progress and push to Live Activity. Call on a timer while the app is active. */
