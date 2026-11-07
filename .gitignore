@@ -41,3 +41,11 @@ example
 # generated native folders
 /ios
 /android
+
+# generated native projects (CNG)
+/ios
+/android
+/build
+
+# local tooling
+.claude/

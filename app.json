@@ -1,16 +1,29 @@
 {
   "expo": {
-    "name": "mettro-tmp",
-    "slug": "mettro-tmp",
-    "version": "1.0.0",
+    "name": "Mettro",
+    "slug": "mettro",
+    "version": "0.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mettrotmp",
+    "scheme": "mettro",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.hiteshrohira.mettro",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Mettro uses your location to find the nearest metro station and track your trip stop by stop.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Mettro uses your location during an active trip to keep your Live Activity updated and alert you before your stop, even when the app is in the background.",
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "processing"
+        ],
+        "NSSupportsLiveActivities": true,
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.hiteshrohira.mettro",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -20,7 +33,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "server",
+      "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -28,9 +41,49 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#0B0D12",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 96
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
+            "node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
+            "node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
+            "node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf",
+            "node_modules/@expo-google-fonts/inter/800ExtraBold/Inter_800ExtraBold.ttf"
+          ]
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "isIosBackgroundLocationEnabled": true
+        }
+      ],
+      "expo-background-task",
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "MetroStatusWidget",
+              "displayName": "Metro Status",
+              "description": "Line status and your nearest station at a glance",
+              "ios": {
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium",
+                  "accessoryRectangular"
+                ],
+                "initialLayout": "./src/widgets/StatusWidget.tsx"
+              },
+              "android": null
+            }
+          ]
         }
       ]
     ],

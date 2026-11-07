@@ -1,56 +1,58 @@
-# Welcome to your Expo app 👋
+# Mettro
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A fast, modern metro companion for iOS. It starts with **Delhi Metro** (DMRC, Rapid Metro Gurugram and the Airport Express), and is built so more cities can be added.
 
-## Get started
+Built with Expo SDK 58, React Native 0.88 and Expo Router. Text is set in Inter.
 
-1. Install dependencies
+## Features
 
-   ```bash
-   npm install
-   ```
+- **Journey planner**: live routes, train times, platforms and fares from the official DMRC journey planner, with *fastest* and *fewest changes* options. If DMRC is unreachable, an offline planner takes over.
+- **Live trip tracking**: stop-by-stop progress that blends GPS with the timetable (useful underground). You can tap any station to correct your position.
+- **Live Activity**: shows the next station, a countdown, your arrival time, where to change trains and when to get off. It appears on the Lock Screen and in the Dynamic Island.
+- **First & last trains** for every station, in every direction (544 direction timings).
+- **Station details**: platforms, gates (with live open/closed status), lifts and escalators, toilets, ATMs and other facilities, parking, feeder buses, nearby places, and phone numbers.
+- **Nearby stations** with walking time and the last train from each.
+- **Network map** on Apple Maps, with a toggle for each line.
+- **Line status**, live from DMRC and refreshed silently in the background. A home-screen widget shows it too. Mettro sends no notifications.
+- Fares, ticket and card info, travel rules, helplines, accessibility and Airport Express info.
+- Light and dark mode.
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Run it
 
 ```bash
-npm run reset-project
+npm install
+npx expo run:ios            # dev build on the simulator
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+To install on an iPhone, see **[docs/SIDELOADING.md](docs/SIDELOADING.md)**.
 
-### Other setup steps
+## Data
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+All data comes from DMRC's public website API (`backend.delhimetrorail.com/api/v2/en`):
 
-## Learn more
+| Data | Source | When |
+|---|---|---|
+| Routes, train times, platforms, fares | `station_route/{from}/{to}/{mode}/{time}` | Live, on every search |
+| Line status | `line_list` | On app open + background refresh |
+| Gate status & station alerts | `station/{code}` | Live, when you open a station |
+| Stations, facilities, gates, lifts, parking | `station/{code}` | Bundled snapshot |
+| First/last trains, hop times | Crawled from the planner | Bundled snapshot |
 
-To learn more about developing your project with Expo, look at the following resources:
+To regenerate the bundled snapshot (for example after new stations open):
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+RAW=/tmp/dmrc && mkdir -p $RAW/st
+./scripts/download_delhi_raw.sh $RAW                           # raw DMRC station data
+python3 -I scripts/build_delhi_graph.py   $RAW src/data/delhi   # build the network graph
+python3 -I scripts/fetch_delhi_timings.py $RAW src/data/delhi/network.json   # crawl first/last trains
+python3 -I scripts/build_delhi_graph.py   $RAW src/data/delhi   # merge timings
+python3 -I scripts/harvest_delhi_edges.py $RAW src/data/delhi/network.json   # cross-check edges against the planner
+```
 
-## Join the community
+The app also checks DMRC's station count in the background, and shows a notice in *More* when new stations appear.
 
-Join our community of developers creating universal apps.
+## Adding a city
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Put the city's data in `src/data/<city>/network.json`, using the same schema as Delhi. Then add an API adapter alongside `src/lib/api.ts`. Everything in the UI is driven by `src/lib/network.ts`.
+
+*Not affiliated with DMRC.*
