@@ -93,7 +93,10 @@ export default function StationScreen() {
           key={f.kind}
           icon={FAC_ICON[f.kind] ?? 'info.circle'}
           title={f.kind}
-          sub={f.items.map((it) => [it.name !== f.kind ? it.name : '', it.loc].filter(Boolean).join(': ')).filter(Boolean).join('\n')}
+          sub={f.items
+            .map((it) => [it.name !== f.kind ? it.name : '', it.loc].filter(Boolean).join(': '))
+            .filter(Boolean)
+            .join('\n')}
         />
       )),
     });
@@ -126,9 +129,7 @@ export default function StationScreen() {
   if (d?.mobile || d?.landline)
     sections.push({
       title: 'Contact',
-      body: [d.mobile, d.landline]
-        .filter(Boolean)
-        .map((n) => <Item key={n} icon="phone" title={n!} onPress={() => call(n!)} />),
+      body: [d.mobile, d.landline].filter(Boolean).map((n) => <Item key={n} icon="phone" title={n!} onPress={() => call(n!)} />),
     });
   if (d?.desc)
     sections.push({
@@ -323,36 +324,36 @@ function Nearby({ items }: { items: NonNullable<ReturnType<typeof getDetails>>['
   const [open, setOpen] = useState<string | null>(null);
   return (
     <View>
-        {groups.map(([k, list]) => (
-          <View key={k}>
-            <Press onPress={() => setOpen(open === k ? null : k)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 }}>
-              <T v="label" style={{ flex: 1 }}>
-                {k}
-              </T>
-              <T v="caption" dim>
-                {list.length}
-              </T>
-              <Icon name={open === k ? 'chevron.up' : 'chevron.down'} size={11} color={c.text3} />
-            </Press>
-            {open === k
-              ? list.map((it, j) => (
-                  <View key={j} style={{ paddingBottom: 8, paddingLeft: 12 }}>
-                    <T v="caption">{it.name}</T>
-                    <T v="caption" dim>
-                      {[
-                        it.group === 'Emergency' ? it.cat : '',
-                        it.km != null ? `${it.km} km` : '',
-                        it.walk ? `${Math.round(it.walk)} min walk` : '',
-                        it.gate ? `via ${it.gate}` : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </T>
-                  </View>
-                ))
-              : null}
-          </View>
-        ))}
+      {groups.map(([k, list]) => (
+        <View key={k}>
+          <Press onPress={() => setOpen(open === k ? null : k)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 }}>
+            <T v="label" style={{ flex: 1 }}>
+              {k}
+            </T>
+            <T v="caption" dim>
+              {list.length}
+            </T>
+            <Icon name={open === k ? 'chevron.up' : 'chevron.down'} size={11} color={c.text3} />
+          </Press>
+          {open === k
+            ? list.map((it, j) => (
+                <View key={j} style={{ paddingBottom: 8, paddingLeft: 12 }}>
+                  <T v="caption">{it.name}</T>
+                  <T v="caption" dim>
+                    {[
+                      it.group === 'Emergency' ? it.cat : '',
+                      it.km != null ? `${it.km} km` : '',
+                      it.walk ? `${Math.round(it.walk)} min walk` : '',
+                      it.gate ? `via ${it.gate}` : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </T>
+                </View>
+              ))
+            : null}
+        </View>
+      ))}
     </View>
   );
 }

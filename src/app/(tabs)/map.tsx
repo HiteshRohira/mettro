@@ -204,7 +204,9 @@ export default function MapScreen() {
       </MapView>
 
       {showFilter ? (
-        <Card onLayout={(e) => setPanelH(e.nativeEvent.layout.height)} style={{ position: 'absolute', bottom: insets.bottom + 90, left: 12, right: 12, gap: 14 }}>
+        <Card
+          onLayout={(e) => setPanelH(e.nativeEvent.layout.height)}
+          style={{ position: 'absolute', bottom: insets.bottom + 90, left: 12, right: 12, gap: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <T v="h3" style={{ flex: 1 }}>
               Show lines
@@ -261,8 +263,22 @@ export default function MapScreen() {
             color={only.length || showFilter ? c.accent : c.text}
           />
         </Press>
-        <Press onPress={() => { setSel(null); frame(only); }} accessibilityLabel={only.length ? 'Fit selected lines' : 'Show full network'}
-          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5, borderColor: c.border }}>
+        <Press
+          onPress={() => {
+            setSel(null);
+            frame(only);
+          }}
+          accessibilityLabel={only.length ? 'Fit selected lines' : 'Show full network'}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: c.surface,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 0.5,
+            borderColor: c.border,
+          }}>
           <Icon name="arrow.up.left.and.arrow.down.right" size={16} />
         </Press>
       </View>

@@ -34,7 +34,11 @@ export default function PickScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: c.bg, paddingTop: 20 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 20 }}>
         <T v="title">{label}</T>
-        <Press onPress={() => router.back()} hitSlop={10} accessibilityLabel="Close station search" style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
+        <Press
+          onPress={() => router.back()}
+          hitSlop={10}
+          accessibilityLabel="Close station search"
+          style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="xmark" size={13} color={c.text2} />
         </Press>
       </View>
@@ -98,7 +102,11 @@ export default function PickScreen() {
             </View>
           ) : undefined
         }
-        ListEmptyComponent={<T v="body" dim style={{ paddingVertical: 32, textAlign: 'center' }}>No stations found</T>}
+        ListEmptyComponent={
+          <T v="body" dim style={{ paddingVertical: 32, textAlign: 'center' }}>
+            No stations found
+          </T>
+        }
         ItemSeparatorComponent={() => <Divider inset={0} />}
         renderItem={({ item }) => <StationItem s={item} onPress={() => choose(item.code)} />}
       />

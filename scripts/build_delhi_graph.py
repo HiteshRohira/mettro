@@ -152,6 +152,21 @@ FIX = {
 }
 for c, st in stations.items():
     st['name'] = FIX.get(st['name'], st['name'])
+
+# DMRC coordinates that are wrong (duplicated or far off); corrected from OpenStreetMap station nodes.
+COORD_OVERRIDES = {
+    'KPEN': (28.6477917, 77.0843425),  # DMRC copies Janakpuri West's position
+    'DM': (28.61931, 77.0332792),      # DMRC point is ~0.8 km east of the station
+    # DMRC points 0.5–1.3 km from the station (beyond the app's 450 m GPS snap radius)
+    'KKDC': (28.6536, 77.29579),
+    'RISE': (28.73838, 77.13985),
+    'METE': (28.51958, 77.2946),
+    'JGPI': (28.72597, 77.16266),
+    'RJBH': (28.67709, 77.34683),
+}
+for c, (la, lo) in COORD_OVERRIDES.items():
+    if c in stations:
+        stations[c]['lat'], stations[c]['lng'] = la, lo
 # add neighbour-referenced codes that exist
 for lid in adj:
     adj[lid] = {e for e in adj[lid] if e[0] in stations and e[1] in stations}
@@ -250,15 +265,56 @@ for l in lines:
         elif (b, a) in ONEWAY: ow = (b, a)
         if ow: a, b = ow
         t = timings.get('edge', {}).get(f'{a}|{b}') or (None if ow else timings.get('edge', {}).get(f'{b}|{a}'))
-        e = {'a': a, 'b': b, 'line': l['id'], 'km': km, 's': t or int(max(90, km / 34 * 3600 + 25))}
+        estimate = int(max(90, km / 34 * 3600 + 25))
+        # planner hop times faster than the line's top speed allows are bad data (seen: 2 s hops)
+        vmax = 120 if l['id'] == 'LN10' else 90
+        if t and t < km / vmax * 3600 + 20:
+            print(f'WARN implausible hop time {a}-{b} {t}s for {km} km -> using {estimate}s')
+            t = None
+        e = {'a': a, 'b': b, 'line': l['id'], 'km': km, 's': t or estimate}
         if ow: e['oneway'] = 1
         edges.append(e)
 
 # first/last per station per direction
+# first/last per directed edge AND line ("A|B|LINE"): track shared by two lines has two timetables
+line_num = {l['id']: l['num'] for l in lines}
 fl = {}
 for k, v in timings.get('dir', {}).items():
-    if v.get('nstations') != 2: continue
-    fl[k] = {'line': v['line'], 'to': v.get('to'), 'platform': v.get('platform'), 'first': v.get('first'), 'last': v.get('last')}
+    parts = k.split('|')
+    if len(parts) != 3: continue  # old crawl format
+    a, b, lid = parts
+    expected = 3 if v.get('via') else 2
+    if v.get('nstations') != expected: continue
+    if v.get('via') and v.get('line_no') not in (None, line_num.get(lid)):
+        print(f'WARN {k}: planner answered with line_no {v.get("line_no")}, skipping')
+        continue
+    fl[k] = {'line': lid, 'to': v.get('to'), 'platform': v.get('platform'), 'first': v.get('first'), 'last': v.get('last')}
+
+# ---- validation: fail the build on data that would mislead riders ----
+problems = []
+seen_pos = {}
+for c, st in stations.items():
+    key = (round(st['lat'], 4), round(st['lng'], 4))
+    if key in seen_pos:
+        problems.append(f'duplicate coordinates {c} == {seen_pos[key]}')
+    seen_pos[key] = c
+    if not (28.2 < st['lat'] < 29.0 and 76.7 < st['lng'] < 77.6):
+        problems.append(f'{c} outside Delhi NCR')
+for e in edges:
+    if e['km'] < 0.3:
+        problems.append(f"edge {e['a']}-{e['b']} only {e['km']} km")
+# every station reachable from every other
+gr = {}
+for e in edges:
+    gr.setdefault(e['a'], set()).add(e['b']); gr.setdefault(e['b'], set()).add(e['a'])
+start = next(iter(stations)); seen = {start}; q = [start]
+for u in q:
+    for v in gr.get(u, ()):
+        if v not in seen: seen.add(v); q.append(v)
+if len(seen) != len(stations):
+    problems.append(f'disconnected: {sorted(set(stations) - seen)}')
+if problems:
+    raise SystemExit('Data validation failed:\n  ' + '\n  '.join(problems))
 
 net = {
     'city': 'delhi',

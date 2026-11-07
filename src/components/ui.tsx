@@ -46,9 +46,7 @@ export function Icon({ name, size = 18, color, style }: { name: SymbolViewProps[
 export function Card({ style, children, pad = 16, ...rest }: ViewProps & { pad?: number }) {
   const { c } = useTheme();
   return (
-    <View
-      {...rest}
-      style={[{ backgroundColor: c.surface, borderRadius: radius.xl, padding: pad }, style]}>
+    <View {...rest} style={[{ backgroundColor: c.surface, borderRadius: radius.xl, padding: pad }, style]}>
       {children}
     </View>
   );
@@ -151,9 +149,7 @@ export function SectionHeader({ title, action, onAction, style }: { title: strin
   return (
     <View
       style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 30, marginBottom: 10, paddingHorizontal: 4 }, style]}>
-      <T v="h3">
-        {title}
-      </T>
+      <T v="h3">{title}</T>
       {action ? (
         <Press onPress={onAction} hitSlop={10}>
           <T v="label" color={c.accent}>

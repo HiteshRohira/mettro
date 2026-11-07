@@ -1,3 +1,5 @@
+import { istClock } from '@/lib/time';
+
 export function fmtDuration(totalS: number) {
   const m = Math.max(1, Math.round(totalS / 60));
   if (m < 60) return `${m} min`;
@@ -8,9 +10,9 @@ export function fmtDuration(totalS: number) {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+/** Clock time in Delhi (IST), regardless of the phone's timezone. */
 export function fmtClock(ms: number) {
-  const d = new Date(ms);
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return istClock(ms);
 }
 
 /** "05:48:01" -> "05:48"; "24:12:00" -> "00:12" */

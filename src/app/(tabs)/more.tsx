@@ -18,7 +18,7 @@ export default function MoreScreen() {
   const insets = useSafeAreaInsets();
   const s = useSettings();
   const liveCount = useStatus((st) => st.networkStationsLive);
-  const newStations = liveCount != null && liveCount - 1 > BUNDLED_STATION_COUNT; // station_list has 1 depot entry
+  const newStations = liveCount != null && liveCount > BUNDLED_STATION_COUNT; // depots are filtered in fetchStationCount
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top }}>
@@ -59,15 +59,33 @@ export default function MoreScreen() {
             </T>
             {/* SwiftUI toggle: RN's Switch reports a stale frame on iOS 26 and sits off-centre */}
             <Host matchContents colorScheme={scheme}>
-              <Toggle isOn={s.liveActivities} onIsOnChange={(v) => s.set({ liveActivities: v })} label="Live Activity during trips" modifiers={[labelsHidden()]} />
+              <Toggle
+                isOn={s.liveActivities}
+                onIsOnChange={(v) => s.set({ liveActivities: v })}
+                label="Live Activity during trips"
+                modifiers={[labelsHidden()]}
+              />
             </Host>
           </View>
           <Disclosure title="Appearance" detail={s.appearance === 'system' ? 'Automatic' : s.appearance === 'light' ? 'Light' : 'Dark'}>
             <View style={{ flexDirection: 'row', gap: 4, backgroundColor: c.surface2, padding: 4, borderRadius: radius.pill }}>
               {(['system', 'light', 'dark'] as Appearance[]).map((a) => (
-                <Press key={a} onPress={() => s.set({ appearance: a })} accessibilityLabel={`Appearance ${a}`} accessibilityState={{ selected: s.appearance === a }}
-                  style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 40, borderRadius: radius.pill, backgroundColor: s.appearance === a ? c.raised : 'transparent' }}>
-                  <T v="label" color={s.appearance === a ? c.text : c.text2}>{a === 'system' ? 'Auto' : a === 'light' ? 'Light' : 'Dark'}</T>
+                <Press
+                  key={a}
+                  onPress={() => s.set({ appearance: a })}
+                  accessibilityLabel={`Appearance ${a}`}
+                  accessibilityState={{ selected: s.appearance === a }}
+                  style={{
+                    flex: 1,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: 40,
+                    borderRadius: radius.pill,
+                    backgroundColor: s.appearance === a ? c.raised : 'transparent',
+                  }}>
+                  <T v="label" color={s.appearance === a ? c.text : c.text2}>
+                    {a === 'system' ? 'Auto' : a === 'light' ? 'Light' : 'Dark'}
+                  </T>
                 </Press>
               ))}
             </View>

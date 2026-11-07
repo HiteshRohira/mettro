@@ -31,7 +31,8 @@ export type Station = {
   interchange: boolean;
 };
 
-export type Edge = { a: string; b: string; line: string; km: number; s: number };
+/** `oneway`: trains only run a -> b (Rapid Metro loop). */
+export type Edge = { a: string; b: string; line: string; km: number; s: number; oneway?: number };
 
 export type DirTiming = {
   line: string;
@@ -39,8 +40,6 @@ export type DirTiming = {
   platform: string | null;
   first: string | null;
   last: string | null;
-  edge_s?: number | null;
-  fare?: number | null;
 };
 
 type Network = {
@@ -189,7 +188,7 @@ for (const e of EDGES) {
   if (!neighbours.has(e.a)) neighbours.set(e.a, []);
   if (!neighbours.has(e.b)) neighbours.set(e.b, []);
   neighbours.get(e.a)!.push({ code: e.b, line: e.line, s: e.s, km: e.km });
-  neighbours.get(e.b)!.push({ code: e.a, line: e.line, s: e.s, km: e.km });
+  if (!e.oneway) neighbours.get(e.b)!.push({ code: e.a, line: e.line, s: e.s, km: e.km });
 }
 export function neighboursOf(code: string) {
   return neighbours.get(code) ?? [];
@@ -199,16 +198,23 @@ export function edgeBetween(a: string, b: string) {
   return neighboursOf(a).find((n) => n.code === b);
 }
 
-/** All direction timings for a station: one per neighbour. */
-export function directionsAt(code: string) {
-  return neighboursOf(code)
-    .map((n) => ({ neighbour: n.code, line: n.line, timing: DIR_TIMINGS[`${code}|${n.code}`] }))
-    .filter((d) => d.timing);
+/** All lines that run directly a -> b (some stretches are shared, e.g. Anand Vihar–Karkarduma). */
+export function linesBetween(a: string, b: string) {
+  return neighboursOf(a)
+    .filter((n) => n.code === b)
+    .map((n) => n.line);
 }
 
-/** Ordered station list of a line incl. branches, for display */
-export function lineSequence(l: Line) {
-  return { main: l.stations, branches: l.branches };
+/** All direction timings for a station: one per neighbour. */
+/** First/last train etc. for trains on `line` leaving `a` towards neighbour `b`. */
+export function dirTiming(a: string, b: string, line: string): DirTiming | undefined {
+  return DIR_TIMINGS[`${a}|${b}|${line}`];
+}
+
+export function directionsAt(code: string) {
+  return neighboursOf(code)
+    .map((n) => ({ neighbour: n.code, line: n.line, timing: dirTiming(code, n.code, n.line) }))
+    .filter((d): d is { neighbour: string; line: string; timing: DirTiming } => !!d.timing);
 }
 
 export function titleTowards(name: string | null | undefined) {
