@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
 import { memo, useMemo, useRef, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Icon, LineDots, Press, T } from '@/components/ui';
+import { Card, Divider, Icon, LineDots, Press, T } from '@/components/ui';
 import { fmtKm, walkMin } from '@/lib/format';
 import { EDGES, getStation, haversineKm, LINES, lineById, lineLabel, STATIONS, stationColors, type Station } from '@/lib/network';
 import { locate, useNearest } from '@/lib/useLocation';
@@ -112,41 +112,32 @@ export default function MapScreen() {
       </MapView>
 
       {showFilter ? (
-      <View style={{ position: 'absolute', top: insets.top + 6, left: 0, right: 0, paddingHorizontal: 12 }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 2 }}>
-          {legend.map((l) => {
-            const off = hidden.has(l.id);
-            return (
-              <Press
-                key={l.id}
-                onPress={() => toggleLine(l.id)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
-                  paddingHorizontal: 11,
-                  height: 32,
-                  borderRadius: radius.pill,
-                  backgroundColor: c.surface,
-                  opacity: off ? 0.45 : 1,
-                  shadowColor: '#000',
-                  shadowOpacity: 0.12,
-                  shadowRadius: 6,
-                  shadowOffset: { width: 0, height: 2 },
-                }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: l.color }} />
-                <T v="caption" style={{ fontFamily: 'Inter-Medium' }}>
-                  {lineLabel(l).replace(' Line', '')}
-                </T>
-              </Press>
-            );
-          })}
-        </ScrollView>
-      </View>
+        <Card style={{ position: 'absolute', top: insets.top + 10, left: 16, right: 16, gap: 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <T v="h3" style={{ flex: 1 }}>Visible lines</T>
+            {hidden.size ? <Press onPress={() => setHidden(new Set())} hitSlop={8}><T v="label" color={c.accent}>Show all</T></Press> : null}
+            <Press onPress={() => setShowFilter(false)} hitSlop={8} accessibilityLabel="Close filters"><Icon name="xmark" size={14} color={c.text2} /></Press>
+          </View>
+          <Divider />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {legend.map((l) => {
+              const off = hidden.has(l.id);
+              return (
+                <Press key={l.id} onPress={() => toggleLine(l.id)} accessibilityState={{ selected: !off }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, minHeight: 36, borderRadius: radius.pill, backgroundColor: off ? c.bg : c.surface2 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: off ? c.border : l.color }} />
+                  <T v="label" color={off ? c.text3 : c.text}>{lineLabel(l).replace(' Line', '')}</T>
+                  {!off ? <Icon name="checkmark" size={9} color={c.text2} /> : null}
+                </Press>
+              );
+            })}
+          </View>
+        </Card>
       ) : null}
 
       <View style={{ position: 'absolute', right: 12, bottom: insets.bottom + 100 + (sel ? 120 : nearest ? 64 : 0), gap: 8 }}>
         <Press
+          accessibilityLabel="Centre on my location"
           onPress={async () => {
             const p = await locate(true);
             if (p) mapRef.current?.animateToRegion({ latitude: p.lat, longitude: p.lng, latitudeDelta: 0.03, longitudeDelta: 0.03 }, 300);
@@ -166,6 +157,7 @@ export default function MapScreen() {
         <Press
           onPress={() => setShowFilter((v) => !v)}
           accessibilityLabel="Filter lines"
+          accessibilityState={{ expanded: showFilter }}
           style={{
             width: 44,
             height: 44,
@@ -181,6 +173,10 @@ export default function MapScreen() {
             size={17}
             color={hidden.size || showFilter ? c.accent : c.text}
           />
+        </Press>
+        <Press onPress={() => { setSel(null); mapRef.current?.animateToRegion(DELHI, 300); }} accessibilityLabel="Show full network"
+          style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5, borderColor: c.border }}>
+          <Icon name="arrow.up.left.and.arrow.down.right" size={16} />
         </Press>
       </View>
 

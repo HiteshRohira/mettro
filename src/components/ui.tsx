@@ -21,8 +21,8 @@ import { font, radius, useTheme } from '@/theme';
 type Variant = 'display' | 'title' | 'h2' | 'h3' | 'body' | 'bodyStrong' | 'label' | 'caption' | 'micro' | 'mono';
 
 const variants: Record<Variant, TextStyle> = {
-  display: { fontFamily: font.heavy, fontSize: 32, letterSpacing: -0.8, lineHeight: 38 },
-  title: { fontFamily: font.bold, fontSize: 24, letterSpacing: -0.5, lineHeight: 30 },
+  display: { fontFamily: font.semibold, fontSize: 34, letterSpacing: -1.2, lineHeight: 41 },
+  title: { fontFamily: font.semibold, fontSize: 24, letterSpacing: -0.5, lineHeight: 30 },
   h2: { fontFamily: font.bold, fontSize: 19, letterSpacing: -0.3, lineHeight: 24 },
   h3: { fontFamily: font.semibold, fontSize: 16, letterSpacing: -0.2, lineHeight: 21 },
   body: { fontFamily: font.regular, fontSize: 15, lineHeight: 21 },
@@ -48,7 +48,7 @@ export function Card({ style, children, pad = 16, ...rest }: ViewProps & { pad?:
   return (
     <View
       {...rest}
-      style={[{ backgroundColor: c.surface, borderRadius: radius.lg, padding: pad, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border }, style]}>
+      style={[{ backgroundColor: c.surface, borderRadius: radius.xl, padding: pad }, style]}>
       {children}
     </View>
   );
@@ -57,6 +57,7 @@ export function Card({ style, children, pad = 16, ...rest }: ViewProps & { pad?:
 export function Press({ style, onPress, haptic = true, ...rest }: PressableProps & { haptic?: boolean; style?: StyleProp<ViewStyle> }) {
   return (
     <Pressable
+      accessibilityRole="button"
       {...rest}
       onPress={(e) => {
         if (haptic) Haptics.selectionAsync().catch(() => {});
@@ -97,6 +98,7 @@ export function Button({
       }}
       haptic={kind !== 'primary'}
       disabled={disabled || loading}
+      accessibilityState={{ disabled: !!disabled, busy: !!loading }}
       accessibilityRole="button"
       style={[
         {
@@ -122,17 +124,11 @@ export function Button({
 
 export function LineChip({ line, small, label }: { line: Line | string; small?: boolean; label?: string }) {
   const l = typeof line === 'string' ? getLine(line) : line;
-  const fg = onLineColor(l.color);
+  const { c } = useTheme();
   return (
-    <View
-      style={{
-        backgroundColor: l.color,
-        borderRadius: radius.pill,
-        paddingHorizontal: small ? 7 : 10,
-        paddingVertical: small ? 2 : 4,
-        alignSelf: 'flex-start',
-      }}>
-      <RNText style={{ fontFamily: font.semibold, fontSize: small ? 11 : 12.5, color: fg }} maxFontSizeMultiplier={1.2}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: small ? 5 : 7, alignSelf: 'flex-start', paddingVertical: small ? 2 : 4 }}>
+      <View style={{ width: small ? 7 : 9, height: small ? 7 : 9, borderRadius: 5, backgroundColor: l.color }} />
+      <RNText style={{ fontFamily: font.medium, fontSize: small ? 11.5 : 13, color: c.text2, flexShrink: 1 }} maxFontSizeMultiplier={1.4}>
         {label ?? lineShort(l)}
       </RNText>
     </View>
@@ -153,8 +149,8 @@ export function SectionHeader({ title, action, onAction, style }: { title: strin
   const { c } = useTheme();
   return (
     <View
-      style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 10, paddingHorizontal: 4 }, style]}>
-      <T v="micro" faint>
+      style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 30, marginBottom: 10, paddingHorizontal: 4 }, style]}>
+      <T v="h3">
         {title}
       </T>
       {action ? (
@@ -259,12 +255,12 @@ export function Disclosure({
         onPress={() => setOpen((v) => !v)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 48, gap: 10 }}>
+        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56, gap: 10 }}>
         <T v="body" style={{ flex: 1 }}>
           {title}
         </T>
         {detail ? (
-          <T v="label" color={tone === 'danger' ? c.danger : c.text3}>
+          <T v="label" numberOfLines={1} style={{ maxWidth: '45%' }} color={tone === 'danger' ? c.danger : c.text2}>
             {detail}
           </T>
         ) : null}

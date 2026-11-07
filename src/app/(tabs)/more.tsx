@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Divider, Press, Row, SectionHeader, T } from '@/components/ui';
+import { Card, Disclosure, Divider, Press, Row, SectionHeader, T } from '@/components/ui';
 import { TOPICS } from '@/lib/info';
 import { getStation } from '@/lib/network';
 import { BUNDLED_STATION_COUNT } from '@/lib/refresh';
@@ -23,7 +23,7 @@ export default function MoreScreen() {
       <ScrollView
         contentInsetAdjustmentBehavior="never"
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: 120 }}>
+        contentContainerStyle={{ paddingTop: 20, paddingHorizontal: 20, paddingBottom: 120 }}>
         <T v="display">More</T>
 
         {newStations ? (
@@ -51,37 +51,22 @@ export default function MoreScreen() {
 
         <SectionHeader title="Preferences" />
         <Card pad={0} style={{ paddingHorizontal: 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 50 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56 }}>
             <T v="body" style={{ flex: 1 }}>
               Live Activity during trips
             </T>
-            <Switch value={s.liveActivities} onValueChange={(v) => s.set({ liveActivities: v })} />
+            <Switch accessibilityLabel="Live Activity during trips" value={s.liveActivities} onValueChange={(v) => s.set({ liveActivities: v })} />
           </View>
-          <Divider />
-          <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 50, gap: 12 }}>
-            <T v="body" style={{ flex: 1 }}>
-              Appearance
-            </T>
-            <View style={{ flexDirection: 'row', backgroundColor: c.surface2, borderRadius: radius.sm, padding: 2 }}>
+          <Disclosure title="Appearance" detail={s.appearance === 'system' ? 'Automatic' : s.appearance === 'light' ? 'Light' : 'Dark'}>
+            <View style={{ flexDirection: 'row', gap: 6, backgroundColor: c.surface2, padding: 4, borderRadius: radius.md }}>
               {(['system', 'light', 'dark'] as Appearance[]).map((a) => (
-                <Press
-                  key={a}
-                  onPress={() => s.set({ appearance: a })}
-                  accessibilityLabel={`Appearance ${a}`}
-                  style={{
-                    paddingHorizontal: 10,
-                    height: 28,
-                    borderRadius: 6,
-                    justifyContent: 'center',
-                    backgroundColor: s.appearance === a ? c.surface : 'transparent',
-                  }}>
-                  <T v="label" color={s.appearance === a ? c.text : c.text2}>
-                    {a === 'system' ? 'Auto' : a[0].toUpperCase() + a.slice(1)}
-                  </T>
+                <Press key={a} onPress={() => s.set({ appearance: a })} accessibilityLabel={`Appearance ${a}`} accessibilityState={{ selected: s.appearance === a }}
+                  style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 44, borderRadius: radius.sm, backgroundColor: s.appearance === a ? c.surface : 'transparent' }}>
+                  <T v="label" color={s.appearance === a ? c.text : c.text2}>{a === 'system' ? 'Auto' : a === 'light' ? 'Light' : 'Dark'}</T>
                 </Press>
               ))}
             </View>
-          </View>
+          </Disclosure>
         </Card>
 
         <SectionHeader title="Travel info" />

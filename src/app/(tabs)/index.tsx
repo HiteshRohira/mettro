@@ -57,10 +57,10 @@ export default function PlanScreen() {
       <ScrollView
         contentInsetAdjustmentBehavior="never"
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingTop: 20, paddingHorizontal: 20, paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         keyboardShouldPersistTaps="handled">
-        <T v="display" style={{ marginBottom: 16 }}>
+        <T v="display" style={{ marginBottom: 24 }}>
           Where to?
         </T>
 
@@ -69,9 +69,9 @@ export default function PlanScreen() {
 
         <Card pad={0} style={{ overflow: 'hidden' }}>
           <View style={{ flexDirection: 'row', alignItems: 'stretch' }}>
-            <View style={{ width: 36, alignItems: 'center', paddingVertical: 24 }}>
+            <View style={{ width: 44, alignItems: 'center', paddingTop: 36, paddingBottom: 36 }}>
               <View style={{ width: 9, height: 9, borderRadius: 5, borderWidth: 2, borderColor: c.text2 }} />
-              <View style={{ flex: 1, width: 1.5, backgroundColor: c.border, marginVertical: 4 }} />
+              <View style={{ flex: 1, width: 2, backgroundColor: c.border, marginVertical: 4 }} />
               <View style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: c.text }} />
             </View>
             <View style={{ flex: 1 }}>
@@ -88,24 +88,24 @@ export default function PlanScreen() {
               <Icon name="arrow.up.arrow.down" size={15} color={c.text3} />
             </Press>
           </View>
-          <Divider />
-          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10, paddingLeft: 14, gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, gap: 10 }}>
             <Press
               onPress={() => setShowTime((v) => !v)}
               hitSlop={8}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}
-              accessibilityLabel="Departure time">
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minHeight: 32 }}
+              accessibilityLabel="Departure time"
+              accessibilityState={{ expanded: showTime }}>
               <Icon name="clock" size={13} color={when ? c.text : c.text3} />
               <T v="label" color={when ? c.text : c.text2}>
                 {when ? `Depart ${fmtClock(when)}` : 'Leave now'}
               </T>
-              {when ? (
-                <Press onPress={() => set({ when: null })} hitSlop={8} accessibilityLabel="Leave now">
-                  <Icon name="xmark.circle.fill" size={14} color={c.text3} />
-                </Press>
-              ) : null}
+              <Icon name={showTime ? 'chevron.up' : 'chevron.down'} size={10} color={c.text3} />
             </Press>
-            <Button title="Find route" onPress={() => go()} disabled={!from || !to || from === to} style={{ height: 40, paddingHorizontal: 18 }} />
+            {when ? (
+              <Press onPress={() => { set({ when: null }); setShowTime(false); }} hitSlop={8}>
+                <T v="label" color={c.accent}>Reset</T>
+              </Press>
+            ) : null}
           </View>
           {showTime ? (
             <View style={{ paddingHorizontal: 12, paddingBottom: 12, alignItems: 'flex-start' }}>
@@ -119,6 +119,7 @@ export default function PlanScreen() {
               </Host>
             </View>
           ) : null}
+          <Button title="Find route" icon="arrow.right" onPress={() => go()} disabled={!from || !to || from === to} style={{ margin: 12, marginTop: 0, height: 52, borderRadius: radius.lg }} />
         </Card>
 
         {shortcuts.length ? (
@@ -126,7 +127,7 @@ export default function PlanScreen() {
             {shortcuts.map((s) => (
               <Press
                 key={s!.key}
-                onPress={() => from && go(from, s!.code)}
+                onPress={() => { if (from) go(from, s!.code); else set({ to: s!.code }); }}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -148,22 +149,20 @@ export default function PlanScreen() {
         {recents.length ? (
           <>
             <SectionHeader title="Recent" action="Clear" onAction={() => useSettings.getState().set({ recents: [] })} />
-            <Card pad={0} style={{ paddingHorizontal: 14 }}>
+            <View style={{ paddingHorizontal: 4 }}>
               {recents.slice(0, 3).map((r, i) => (
                 <View key={r.from + r.to}>
                   {i > 0 ? <Divider /> : null}
-                  <Press onPress={() => go(r.from, r.to)} style={{ paddingVertical: 13 }}>
-                    <T v="body" numberOfLines={1}>
-                      {getStation(r.from).name}
-                      <T v="body" faint>
-                        {'  →  '}
-                      </T>
-                      {getStation(r.to).name}
-                    </T>
+                  <Press onPress={() => go(r.from, r.to)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 12 }}>
+                    <Icon name="arrow.up.right" size={16} color={c.text3} />
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <T v="bodyStrong" numberOfLines={2}>{getStation(r.to).name}</T>
+                      <T v="caption" dim numberOfLines={1}>From {getStation(r.from).name}</T>
+                    </View>
                   </Press>
                 </View>
               ))}
-            </Card>
+            </View>
           </>
         ) : null}
 
@@ -172,14 +171,14 @@ export default function PlanScreen() {
         {favourites.length ? (
           <>
             <SectionHeader title="Saved" />
-            <Card pad={0} style={{ paddingHorizontal: 14 }}>
+            <View style={{ paddingHorizontal: 4 }}>
               {favourites.map((code, i) => (
                 <View key={code}>
                   {i > 0 ? <Divider /> : null}
                   <StationRow code={code} />
                 </View>
               ))}
-            </Card>
+            </View>
           </>
         ) : null}
       </ScrollView>
@@ -190,10 +189,11 @@ export default function PlanScreen() {
 function StationField({ value, placeholder, hint, onPress }: { value: string | null; placeholder: string; hint?: 'location.fill'; onPress: () => void }) {
   const { c } = useTheme();
   return (
-    <Press onPress={onPress} style={{ height: 54, justifyContent: 'center', paddingRight: 4 }} accessibilityLabel={placeholder}>
+    <Press onPress={onPress} style={{ minHeight: 80, justifyContent: 'center', paddingRight: 4, paddingVertical: 12 }} accessibilityLabel={`${placeholder}${value ? ` ${getStation(value).name}` : ''}`}>
+      <T v="caption" dim style={{ marginBottom: 3 }}>{placeholder}</T>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <T v="h3" numberOfLines={1} color={value ? c.text : c.text3} style={{ flexShrink: 1, fontFamily: value ? undefined : 'Inter-Medium' }}>
-          {value ? getStation(value).name : placeholder}
+        <T v="h2" numberOfLines={2} color={value ? c.text : c.text3} style={{ flexShrink: 1 }}>
+          {value ? getStation(value).name : 'Choose station'}
         </T>
         {hint ? <Icon name={hint} size={11} color={c.accent} /> : null}
       </View>
@@ -234,14 +234,14 @@ function NearbySection({
   return (
     <>
       <SectionHeader title="Nearby" />
-      <Card pad={0} style={{ paddingHorizontal: 14 }}>
+      <View style={{ paddingHorizontal: 4 }}>
         {nearby.map(({ station, km }, i) => (
           <View key={station.code}>
             {i > 0 ? <Divider /> : null}
             <StationRow code={station.code} walk={walkMin(km)} now={now} />
           </View>
         ))}
-      </Card>
+      </View>
     </>
   );
 }
@@ -270,7 +270,7 @@ function StationRow({ code, walk, now }: { code: string; walk?: number; now?: nu
   return (
     <Press
       onPress={() => router.push({ pathname: '/station/[code]', params: { code } })}
-      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 13, gap: 10 }}>
+      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16, gap: 10 }}>
       <View style={{ flex: 1, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <T v="body" numberOfLines={1} style={{ flexShrink: 1 }}>
@@ -286,7 +286,7 @@ function StationRow({ code, walk, now }: { code: string; walk?: number; now?: nu
       </View>
       {walk != null ? (
         <T v="label" faint>
-          {walk} min
+          {walk} min walk
         </T>
       ) : null}
     </Press>

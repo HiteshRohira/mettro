@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, TextInput, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Platform, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Divider, Icon, LineDots, Press, T } from '@/components/ui';
@@ -31,16 +31,14 @@ export default function PickScreen() {
   const near = nearby.filter((n) => n.km < 40);
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: 12 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10 }}>
-        <T v="h2">{label}</T>
-        <Press onPress={() => router.back()} hitSlop={10}>
-          <T v="bodyStrong" color={c.accent}>
-            Cancel
-          </T>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: c.bg, paddingTop: 20 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 20 }}>
+        <T v="title">{label}</T>
+        <Press onPress={() => router.back()} hitSlop={10} accessibilityLabel="Close station search" style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="xmark" size={13} color={c.text2} />
         </Press>
       </View>
-      <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+      <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
         <View
           style={{
             flexDirection: 'row',
@@ -49,7 +47,7 @@ export default function PickScreen() {
             backgroundColor: c.surface2,
             borderRadius: radius.md,
             paddingHorizontal: 12,
-            height: 44,
+            height: 52,
           }}>
           <Icon name="magnifyingglass" size={15} color={c.text3} />
           <TextInput
@@ -59,6 +57,7 @@ export default function PickScreen() {
             placeholder="Search stations"
             placeholderTextColor={c.text3}
             autoCorrect={false}
+            accessibilityLabel="Search stations"
             returnKeyType="search"
             onSubmitEditing={() => results[0] && choose(results[0].code)}
             style={{ flex: 1, fontFamily: font.medium, fontSize: 16, color: c.text }}
@@ -71,7 +70,7 @@ export default function PickScreen() {
         keyExtractor={(s) => s.code}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 40 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 40 }}
         ListHeaderComponent={
           showSuggestions ? (
             <View>
@@ -99,10 +98,11 @@ export default function PickScreen() {
             </View>
           ) : undefined
         }
+        ListEmptyComponent={<T v="body" dim style={{ paddingVertical: 32, textAlign: 'center' }}>No stations found</T>}
         ItemSeparatorComponent={() => <Divider inset={0} />}
         renderItem={({ item }) => <StationItem s={item} onPress={() => choose(item.code)} />}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -124,13 +124,11 @@ function Group({ title, items, onPick }: { title: string; items: Station[]; onPi
 
 function StationItem({ s, onPress }: { s: Station; onPress: () => void }) {
   return (
-    <Press onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 }}>
-      <View style={{ width: 28, alignItems: 'center' }}>
-        <LineDots colors={stationColors(s)} size={8} />
-      </View>
+    <Press onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 17 }}>
       <T v="body" numberOfLines={1} style={{ flex: 1 }}>
         {s.name}
       </T>
+      <LineDots colors={stationColors(s)} size={7} />
     </Press>
   );
 }

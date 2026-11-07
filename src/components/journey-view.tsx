@@ -13,7 +13,7 @@ export function JourneyLegs({ j }: { j: Journey }) {
     <View>
       {j.legs.map((leg, i) => (
         <View key={i}>
-          <LegBlock leg={leg} first={i === 0} last={i === j.legs.length - 1} />
+          <LegBlock key={`${j.id}-${i}`} leg={leg} first={i === 0} last={i === j.legs.length - 1} />
           {i < j.legs.length - 1 ? <TransferBlock from={leg} to={j.legs[i + 1]} /> : null}
         </View>
       ))}
@@ -45,7 +45,7 @@ function StationNode({ code, color, big, time, sub }: { code: string; color: str
         />
       </View>
       <View style={{ flex: 1, paddingLeft: 8, paddingVertical: big ? 4 : 2 }}>
-        <T v={big ? 'h3' : 'body'} numberOfLines={1} dim={!big}>
+        <T v={big ? 'h3' : 'body'} numberOfLines={2} dim={!big}>
           {getStation(code).name}
         </T>
         {sub ? (
@@ -66,13 +66,13 @@ function LegBlock({ leg, first, last }: { leg: Leg; first: boolean; last: boolea
   const stops = leg.stations.length - 1;
   return (
     <View>
-      <StationNode code={leg.stations[0]} color={line.color} big time={leg.depart} />
+      {first ? <StationNode code={leg.stations[0]} color={line.color} big time={leg.depart} /> : null}
       <View style={{ flexDirection: 'row' }}>
         <View style={{ width: 52 }} />
         <View style={{ width: 24, alignItems: 'center' }}>
-          <View style={{ width: 6, flex: 1, backgroundColor: line.color, borderRadius: 3, marginVertical: -2 }} />
+          <View style={{ width: 3, flex: 1, backgroundColor: line.color, borderRadius: 3, marginVertical: -2 }} />
         </View>
-        <View style={{ flex: 1, paddingLeft: 8, paddingVertical: 10, gap: 6 }}>
+        <View style={{ flex: 1, paddingLeft: 8, paddingVertical: 16, gap: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <LineChip line={line} label={lineLabel(line)} />
             {leg.platform ? (
@@ -82,7 +82,7 @@ function LegBlock({ leg, first, last }: { leg: Leg; first: boolean; last: boolea
             ) : null}
           </View>
           <T v="body">Towards {leg.towards}</T>
-          <Press onPress={() => setOpen((v) => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} hitSlop={6}>
+          <Press accessibilityState={{ expanded: open }} disabled={!mids.length} onPress={() => setOpen((v) => !v)} style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6 }} hitSlop={6}>
             <T v="caption" faint>
               {stops} stop{stops === 1 ? '' : 's'} · {fmtDuration(leg.durationS)}
             </T>
@@ -90,12 +90,12 @@ function LegBlock({ leg, first, last }: { leg: Leg; first: boolean; last: boolea
           </Press>
           {open
             ? mids.map((code) => (
-                <View key={code} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: -26 }}>
+                <Press key={code} onPress={() => router.push({ pathname: '/station/[code]', params: { code } })} style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: -26 }}>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.surface, borderWidth: 2, borderColor: line.color }} />
-                  <T v="caption" dim style={{ marginLeft: 14 }}>
+                  <T v="caption" dim style={{ marginLeft: 14, flex: 1 }}>
                     {getStation(code).name}
                   </T>
-                </View>
+                </Press>
               ))
             : null}
         </View>
@@ -120,22 +120,10 @@ function TransferBlock({ from, to }: { from: Leg; to: Leg }) {
             <View key={i} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: c.text3 }} />
           ))}
         </View>
-        <View
-          style={{
-            flex: 1,
-            paddingLeft: 8,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            backgroundColor: c.surface2,
-            borderRadius: 10,
-            padding: 10,
-            marginLeft: 8,
-          }}>
+        <View style={{ flex: 1, paddingLeft: 8, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Icon name="figure.walk" size={15} color={c.text2} />
           <T v="caption" dim style={{ flex: 1 }}>
-            Change to {lineLabel(b)}
-            {to.depart && from.arrive ? ` · ${hm(to.depart)}` : ''}
+            Change to {lineLabel(b)}{to.depart && from.arrive ? ` · departs ${hm(to.depart)}` : ''}
           </T>
         </View>
       </View>

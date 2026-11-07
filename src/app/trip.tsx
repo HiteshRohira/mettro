@@ -1,21 +1,22 @@
 import { router } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Empty, LineChip, Press, T } from '@/components/ui';
+import { Button, Card, Empty, Icon, LineChip, Press, SectionHeader, T } from '@/components/ui';
 import { fmtClock } from '@/lib/format';
-import { getLine, getStation, lineLabel, onLineColor } from '@/lib/network';
+import { getLine, getStation, lineLabel } from '@/lib/network';
 import { computeProgress, setPosition, stopTrip, tick } from '@/lib/trip';
 import { useTrip } from '@/store/trip';
 import { useNow } from '@/lib/useNow';
-import { radius, useTheme } from '@/theme';
+import { useTheme } from '@/theme';
 
 export default function TripScreen() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const trip = useTrip((s) => s.trip);
   const now = useNow(5000);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     tick();
@@ -34,7 +35,6 @@ export default function TripScreen() {
   const j = trip.journey;
   const leg = j.legs[Math.min(p.legIndex, j.legs.length - 1)];
   const line = getLine(leg.lineId);
-  const fg = onLineColor(line.color);
   const minsToNext = Math.max(0, Math.round((p.nextAt - now) / 60000));
   const gpsFresh = trip.gpsIdxAt && now - trip.gpsIdxAt < 5 * 60e3;
   const delayMin = Math.round(trip.delayMs / 60000);
@@ -54,32 +54,37 @@ export default function TripScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
-        <View style={{ backgroundColor: line.color, borderRadius: radius.xl, padding: 18, gap: 8 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-            <T v="label" color={fg} style={{ opacity: 0.8, flex: 1 }} numberOfLines={2}>
-              {lineLabel(line)} · towards {leg.towards}
-            </T>
-            <T v="label" color={fg}>
-              {p.phase === 'arrived' ? 'Done' : `Arrive ${fmtClock(p.eta)}`}
-            </T>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40 }}>
+        <Card pad={24}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 22 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: line.color }} />
+            <T v="label" dim style={{ flex: 1 }}>{lineLabel(line)} · {leg.towards}</T>
           </View>
-          <T v="title" color={fg}>
-            {p.phase === 'arrived' ? `You’ve arrived at ${getStation(j.to).name}` : `Next: ${p.next ? getStation(p.next.code).name : ''}`}
+          <T v="label" dim>{p.phase === 'arrived' ? 'You’ve arrived' : 'Next stop'}</T>
+          <T v="display" style={{ marginTop: 6 }}>
+            {getStation(p.phase === 'arrived' ? j.to : p.next?.code ?? j.to).name}
           </T>
           {p.phase !== 'arrived' ? (
-            <T v="body" color={fg} style={{ opacity: 0.9 }}>
-              {minsToNext <= 0 ? 'Arriving now' : `in about ${minsToNext} min`} · {p.stopsLeft} stop{p.stopsLeft === 1 ? '' : 's'} to go
-            </T>
+            <T v="body" dim style={{ marginTop: 8 }}>{minsToNext <= 0 ? 'Arriving now' : `In about ${minsToNext} min`}</T>
           ) : null}
-          <View style={{ height: 4, borderRadius: 2, marginVertical: 6, backgroundColor: fg + '33', overflow: 'hidden' }}>
-            <View style={{ height: 4, width: `${Math.round(p.progress * 100)}%`, backgroundColor: fg }} />
+          <View style={{ height: 3, borderRadius: 2, marginTop: 24, marginBottom: 20, backgroundColor: c.surface2, overflow: 'hidden' }}>
+            <View style={{ height: 3, width: `${Math.round(p.progress * 100)}%`, backgroundColor: line.color }} />
           </View>
-          <T v="label" color={fg} style={{ opacity: 0.9 }}>
-            {p.action}
-          </T>
-        </View>
+          {p.phase !== 'arrived' ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Icon name={p.phase === 'transfer' ? 'arrow.triangle.branch' : 'arrow.down.right'} size={18} color={c.text2} />
+              <T v="bodyStrong" style={{ flex: 1 }}>{p.action}</T>
+            </View>
+          ) : null}
+        </Card>
 
+        {p.phase !== 'arrived' ? <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginTop: 20, gap: 12 }}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <T v="caption" dim>{getStation(j.to).name}</T>
+            <T v="h2">Arrive {fmtClock(p.eta)}</T>
+          </View>
+          <T v="label" dim>{p.stopsLeft} stop{p.stopsLeft === 1 ? '' : 's'} left</T>
+        </View> : null}
         <T v="caption" faint style={{ marginTop: 10, paddingHorizontal: 4 }}>
           {[
             gpsFresh ? 'Tracking by GPS' : 'Following the timetable',
@@ -89,12 +94,14 @@ export default function TripScreen() {
             .join(' · ')}
         </T>
 
-        <Card style={{ marginTop: 12 }} pad={12}>
+        <SectionHeader title={showAll ? 'Your route' : 'Coming up'} action={showAll ? 'Show less' : 'All stops'} onAction={() => setShowAll((v) => !v)} />
+        <Card pad={16}>
           {p.pts.map((pt, i) => {
+            if (!showAll && (i < p.idx || i > p.idx + 3)) return null;
             const passed = i < p.idx;
             const here = i === p.idx;
             const ln = getLine(j.legs[pt.legIndex].lineId);
-            const nextPt = p.pts[i + 1];
+            const nextPt = !showAll && i === p.idx + 3 ? undefined : p.pts[i + 1];
             const segColor = nextPt ? getLine(j.legs[nextPt.legIndex].lineId).color : ln.color;
             const at = pt.at + trip.delayMs;
             return (
@@ -107,7 +114,7 @@ export default function TripScreen() {
                     { text: 'I’m here', onPress: () => setPosition(i) },
                   ])
                 }
-                style={{ flexDirection: 'row', alignItems: 'stretch', minHeight: pt.transfer ? 58 : 40 }}>
+                style={{ flexDirection: 'row', alignItems: 'stretch', minHeight: pt.transfer ? 72 : 48 }}>
                 <View style={{ width: 48, paddingTop: 2 }}>
                   <T v="caption" faint={passed} style={{ fontVariant: ['tabular-nums'] }}>
                     {fmtClock(at)}
@@ -127,11 +134,11 @@ export default function TripScreen() {
                     }}
                   />
                   {nextPt ? (
-                    <View style={{ position: 'absolute', top: 10, bottom: -4, width: 4, borderRadius: 2, backgroundColor: i < p.idx ? c.border : segColor }} />
+                    <View style={{ position: 'absolute', top: 10, bottom: -4, width: 3, borderRadius: 2, backgroundColor: i < p.idx ? c.border : segColor }} />
                   ) : null}
                 </View>
                 <View style={{ flex: 1, paddingLeft: 10, paddingBottom: 10 }}>
-                  <T v={here || pt.transfer ? 'bodyStrong' : 'body'} faint={passed} numberOfLines={1}>
+                  <T v={here || pt.transfer ? 'bodyStrong' : 'body'} faint={passed} numberOfLines={2}>
                     {getStation(pt.code).name}
                   </T>
                   {pt.transfer ? (
@@ -150,7 +157,7 @@ export default function TripScreen() {
             );
           })}
         </Card>
-        {p.phase !== 'arrived' ? (
+        {showAll && p.phase !== 'arrived' ? (
           <T v="caption" faint style={{ marginTop: 8, paddingHorizontal: 4 }}>
             Tap a stop to correct your position.
           </T>
@@ -166,7 +173,7 @@ export default function TripScreen() {
             style={{ marginTop: 16 }}
           />
         ) : (
-          <Button title="End trip" kind="secondary" onPress={end} style={{ marginTop: 20 }} />
+          <Button title="End trip" kind="ghost" onPress={end} style={{ marginTop: 20 }} />
         )}
       </ScrollView>
     </View>

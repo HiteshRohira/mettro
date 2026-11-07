@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { JourneyLegs, JourneySummaryLine } from '@/components/journey-view';
+import { JourneyLegs } from '@/components/journey-view';
 import { Button, Card, Icon, Press, T } from '@/components/ui';
 import { planOnline } from '@/lib/api';
 import { fmtClock, fmtDuration, hm, hmToMinutes } from '@/lib/format';
@@ -93,8 +93,8 @@ export default function JourneyScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: `${fromS.name} → ${toS.name}` }} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 110 }}>
+      <Stack.Screen options={{ title: 'Route' }} />
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 110 }}>
         {!j ? (
           loading ? (
             <ActivityIndicator style={{ marginTop: 40 }} />
@@ -105,44 +105,33 @@ export default function JourneyScreen() {
           )
         ) : (
           <>
-            <View style={{ paddingHorizontal: 4, gap: 4 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                <T v="display">{fmtDuration(j.totalS)}</T>
-                <T v="h2" dim={j.fareSource === 'estimate'}>
-                  {j.fare != null ? `${j.fareSource === 'estimate' ? '~' : ''}₹${j.fare}` : ''}
-                </T>
-              </View>
-              <T v="label" dim>
-                {[
-                  departLabelFull,
-                  j.interchanges ? `${j.interchanges} change${j.interchanges > 1 ? 's' : ''}` : 'Direct',
-                ]
-                  .filter(Boolean)
-                  .join('  ·  ')}
-              </T>
+            <View style={{ gap: 4, marginBottom: 24 }}>
+              <T v="label" dim>From {fromS.name}</T>
+              <T v="title">{toS.name}</T>
             </View>
 
             {options.length > 1 ? (
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 20, backgroundColor: c.surface2, padding: 4, borderRadius: radius.lg }}>
                 {options.map((o, i) => (
-                  <Press key={o.id} onPress={() => setSel(i)} style={{ flex: 1 }} accessibilityState={{ selected: i === sel }}>
-                    <View
-                      style={{
-                        paddingVertical: 10,
-                        paddingHorizontal: 12,
-                        borderRadius: radius.md,
-                        gap: 6,
-                        backgroundColor: i === sel ? c.surface : 'transparent',
-                        borderWidth: 1,
-                        borderColor: i === sel ? c.text : c.border,
-                      }}>
-                      <T v="bodyStrong">{fmtDuration(o.totalS)}</T>
-                      <JourneySummaryLine j={o} />
-                    </View>
+                  <Press key={o.id} onPress={() => setSel(i)} accessibilityState={{ selected: i === sel }}
+                    style={{ flex: 1, padding: 12, borderRadius: radius.md, gap: 4, backgroundColor: i === sel ? c.surface : 'transparent' }}>
+                    <T v="label" color={i === sel ? c.text : c.text2}>{i === 0 ? 'Fastest' : o.interchanges < options[0].interchanges ? 'Fewer changes' : 'Alternative'}</T>
+                    <T v="bodyStrong">{fmtDuration(o.totalS)}</T>
+                    <T v="caption" dim>{o.interchanges ? `${o.interchanges} change${o.interchanges > 1 ? 's' : ''}` : 'Direct'}</T>
                   </Press>
                 ))}
               </View>
             ) : null}
+
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 16, paddingHorizontal: 2 }}>
+              <T v="display" style={{ flex: 1 }}>{fmtDuration(j.totalS)}</T>
+              <T v="h2" dim={j.fareSource === 'estimate'}>
+                {j.fare != null ? `${j.fareSource === 'estimate' ? '~' : ''}₹${j.fare}` : ''}
+              </T>
+            </View>
+            <T v="label" dim style={{ marginTop: 6, paddingHorizontal: 2 }}>
+              {[departLabelFull, j.interchanges ? `${j.interchanges} change${j.interchanges > 1 ? 's' : ''}` : 'Direct'].filter(Boolean).join('  ·  ')}
+            </T>
 
             {offline ? <Notice icon="wifi.slash" tone="warn" text="Offline — times and fare are estimates." /> : null}
             {afterLast ? (
@@ -170,7 +159,7 @@ export default function JourneyScreen() {
               />
             ) : null}
 
-            <Card style={{ marginTop: 16, paddingVertical: 18 }} pad={8}>
+            <Card style={{ marginTop: 24, paddingVertical: 24 }} pad={12}>
               <JourneyLegs j={j} />
             </Card>
             {loading ? (
@@ -195,7 +184,7 @@ export default function JourneyScreen() {
             paddingBottom: insets.bottom + 10,
             backgroundColor: c.bg,
           }}>
-          <Button title="Start trip" onPress={onStart} loading={starting} disabled={afterLast && !loading} />
+          <Button title="Start trip" icon="arrow.right" onPress={onStart} loading={starting} disabled={afterLast && !loading} />
         </View>
       ) : null}
     </View>

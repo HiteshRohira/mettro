@@ -57,8 +57,6 @@ export default function StationScreen() {
   const gates = (live?.gates?.length ? d?.gates.map((g) => ({ ...g, open: live.gates.find((x) => x.name === g.name)?.open ?? g.open })) : d?.gates) ?? [];
   const closedGates = gates.filter((g) => !g.open);
   const alerts = live?.status?.length ? live.status : (d?.status ?? []);
-  const lifts = d?.lifts.filter((l) => l.type === 'Lift') ?? [];
-  const escalators = d?.lifts.filter((l) => l.type !== 'Lift') ?? [];
   const brokenLifts = d?.lifts.filter((l) => !l.ok) ?? [];
   const call = (n: string) => Linking.openURL(`tel:${n}`);
 
@@ -89,7 +87,7 @@ export default function StationScreen() {
   if (d?.lifts?.length)
     sections.push({
       title: 'Lifts & escalators',
-      detail: brokenLifts.length ? `${brokenLifts.length} not working` : `${lifts.length} · ${escalators.length}`,
+      detail: brokenLifts.length ? `${brokenLifts.length} not working` : undefined,
       tone: brokenLifts.length ? 'danger' : undefined,
       body: d.lifts.map((l, i) => (
         <Item
@@ -183,11 +181,11 @@ export default function StationScreen() {
           ),
         }}
       />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 40 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 40 }}>
         <T v="display" style={{ marginTop: 4 }}>
           {s.name}
         </T>
-        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+        <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap', marginTop: 10 }}>
           {lines.map((l) => (
             <Press key={l.id} onPress={() => router.push({ pathname: '/line/[id]', params: { id: l.id } })}>
               <LineChip line={l} label={lineLabel(l)} />
@@ -239,7 +237,7 @@ export default function StationScreen() {
           </Card>
         ) : null}
 
-        <SectionHeader title="Trains" />
+        <SectionHeader title="First & last trains" />
         <Card pad={0} style={{ paddingHorizontal: 14 }}>
           {dirs.length ? (
             <>
@@ -260,7 +258,7 @@ export default function StationScreen() {
                     <View style={{ paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: l.color }} />
                       <View style={{ flex: 1 }}>
-                        <T v="body" numberOfLines={1}>
+                        <T v="body" numberOfLines={2}>
                           {titleTowards(dir.timing.to)}
                         </T>
                         {dir.timing.platform ? (
