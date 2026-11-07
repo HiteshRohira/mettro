@@ -3,9 +3,9 @@ import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
 
 import { fetchStationCount } from '@/lib/api';
-import { directionsAt, getStation, LINES, lineLabel, STATIONS } from '@/lib/network';
+import { directionsAt, getStation, lineLabel, STATIONS } from '@/lib/network';
 import { useSettings } from '@/store/settings';
-import { disruptedLines, isNormal, useStatus } from '@/store/status';
+import { disruptedLines, useStatus } from '@/store/status';
 import StatusWidget from '@/widgets/StatusWidget';
 
 /**
@@ -39,8 +39,8 @@ export function updateStatusWidget() {
     StatusWidget.updateSnapshot({
       checkedAt: checkedAt ?? 0,
       issues: bad.length,
-      headline: bad.length ? `${lineLabel(bad[0])}: ${lines[bad[0].id]}` : 'All lines running normally',
-      lines: LINES.map((l) => ({ n: lineLabel(l).replace(' Line', ''), c: l.color, ok: isNormal(lines[l.id]) })),
+      headline: bad.length ? `${lineLabel(bad[0])}: ${lines[bad[0].id]}` : '',
+      lines: bad.map((l) => ({ n: lineLabel(l).replace(' Line', ''), c: l.color, ok: false, s: lines[l.id] })),
       first: home.text,
       station: home.station,
     });
