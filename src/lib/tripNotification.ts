@@ -23,11 +23,13 @@ export async function ensureNotificationPermission(ask: boolean) {
 export function tripNotificationContent(p: TripActivityProps) {
   const done = p.phase === 'arrived';
   const subtitle = done ? p.action : `${p.lineName} · towards ${p.towards}`;
-  const body = done ? `Arrived · ${p.etaText}` : `${p.action ? p.action + ' · ' : ''}Arrive ${p.etaText}`;
+  const arrive = p.action.includes(p.etaText) ? '' : `Arrive ${p.etaText}`; // milestone text may already say it
+  const body = done ? `Arrived · ${p.etaText}` : [p.action, arrive].filter(Boolean).join(' · ');
   const content: Record<string, string | number> = {
     notificationTitle: p.title,
     notificationBody: body,
-    notificationBigText: done ? body : `${body}\nNow: ${p.current}${p.stopsLeft > 0 ? ` · ${p.stopsLeft} stop${p.stopsLeft === 1 ? '' : 's'} to ${p.dest}` : ''}`,
+    // no "now at <station>" line: it can't be kept current between location callbacks
+    notificationBigText: body,
     notificationSubText: subtitle,
     notificationColor: p.lineColor,
     notificationProgress: done ? 1 : Math.max(0, Math.min(1, p.progress)),

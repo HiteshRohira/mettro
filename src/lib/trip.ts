@@ -210,7 +210,9 @@ function nextMilestone(trip: Trip, p: Progress, now: number) {
  * stop by stop, so it shows content that stays true until the next milestone instead.
  */
 function milestoneMode(trip: Trip) {
-  return trip.tracking !== 'background';
+  // Android pauses JS timers in the background, so the trip notification is only refreshed when
+  // a location callback arrives (rarely underground): keep content that stays true until then.
+  return trip.tracking !== 'background' || Platform.OS === 'android';
 }
 
 export function activityProps(trip: Trip, p: Progress, now = Date.now()): TripActivityProps {
@@ -419,7 +421,8 @@ async function startLocation(ask: boolean): Promise<LocationMode> {
         try {
           await Location.startLocationUpdatesAsync(TRIP_LOCATION_TASK, {
             accuracy: Location.Accuracy.High,
-            distanceInterval: 80,
+            // time-based callbacks (no distance filter): each one also refreshes the notification
+            distanceInterval: 0,
             timeInterval: 15000,
             foregroundService: {
               notificationTitle: String(initial.notificationTitle ?? 'Trip in progress'),

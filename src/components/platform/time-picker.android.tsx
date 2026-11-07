@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { useEffect, useMemo, useRef, type ComponentRef } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 
 import { T } from '@/components/ui';
@@ -24,24 +24,33 @@ export function TimePicker({ value, now, onChange }: { value: number | null; now
   const min = now - 3600e3;
   const at = Math.max(value ?? now, min);
   const today = dayStart(now);
-  const dayIdx = Math.min(DAYS - 1, Math.max(0, Math.round((dayStart(at) - today) / DAY)));
+  // The first day is the one holding the earliest allowed time, so just after midnight
+  // "Yesterday" stays listed while a late-evening pick is still valid.
+  const first = dayStart(min);
+  const dayIdx = Math.min(DAYS - 1, Math.max(0, Math.round((dayStart(at) - first) / DAY)));
+  // Bumped on every settled scroll so wheels snap back when a pick is clamped or rejected.
+  const [settle, setSettle] = useState(0);
   const hour = Math.floor((at - dayStart(at)) / 3600e3);
   const minute = Math.floor((at - dayStart(at)) / 60e3) % 60;
 
   const days = useMemo(
     () =>
       Array.from({ length: DAYS }, (_, i) => {
-        if (i === 0) return 'Today';
-        if (i === 1) return 'Tomorrow';
-        const d = new Date(today + i * DAY + IST);
+        const day = first + i * DAY;
+        const rel = Math.round((day - today) / DAY);
+        if (rel === -1) return 'Yesterday';
+        if (rel === 0) return 'Today';
+        if (rel === 1) return 'Tomorrow';
+        const d = new Date(day + IST);
         return `${WEEKDAY[d.getUTCDay()]} ${d.getUTCDate()} ${MONTH[d.getUTCMonth()]}`;
       }),
-    [today],
+    [first, today],
   );
 
   const set = (d: number, h: number, m: number) => {
-    const next = Math.max(min, today + d * DAY + h * 3600e3 + m * 60e3);
+    const next = Math.max(min, first + d * DAY + h * 3600e3 + m * 60e3);
     if (next !== at) onChange(next);
+    setSettle((n) => n + 1);
   };
 
   return (
@@ -51,9 +60,9 @@ export function TimePicker({ value, now, onChange }: { value: number | null; now
         pointerEvents="none"
         style={{ position: 'absolute', left: 0, right: 0, top: ITEM * 2, height: ITEM, borderRadius: radius.sm, backgroundColor: c.surface2 }}
       />
-      <Wheel items={days} index={dayIdx} onIndex={(i) => set(i, hour, minute)} flex={1.6} align="flex-end" />
-      <Wheel items={HOURS} index={hour} onIndex={(i) => set(dayIdx, i, minute)} flex={0.8} align="flex-end" />
-      <Wheel items={MINUTES} index={minute} onIndex={(i) => set(dayIdx, hour, i)} flex={0.8} align="flex-start" />
+      <Wheel items={days} index={dayIdx} settle={settle} onIndex={(i) => set(i, hour, minute)} flex={1.6} align="flex-end" />
+      <Wheel items={HOURS} index={hour} settle={settle} onIndex={(i) => set(dayIdx, i, minute)} flex={0.8} align="flex-end" />
+      <Wheel items={MINUTES} index={minute} settle={settle} onIndex={(i) => set(dayIdx, hour, i)} flex={0.8} align="flex-start" />
     </View>
   );
 }
@@ -61,19 +70,20 @@ export function TimePicker({ value, now, onChange }: { value: number | null; now
 const HOURS = Array.from({ length: 24 }, (_, i) => pad(i));
 const MINUTES = Array.from({ length: 60 }, (_, i) => pad(i));
 
-function Wheel({ items, index, onIndex, flex, align }: { items: string[]; index: number; onIndex: (i: number) => void; flex: number; align: 'flex-start' | 'flex-end' }) {
+function Wheel({ items, index, settle, onIndex, flex, align }: { items: string[]; index: number; settle: number; onIndex: (i: number) => void; flex: number; align: 'flex-start' | 'flex-end' }) {
   const { c } = useTheme();
   const ref = useRef<ComponentRef<typeof ScrollView>>(null);
   const shown = useRef(index);
   const settled = useRef(true);
 
-  // follow external changes (e.g. clamped to the earliest allowed time)
+  // Follow the controlled value: external changes, and picks that were clamped or rejected (then
+  // `index` may not change at all, so `settle` re-runs this after every settled scroll).
   useEffect(() => {
     if (settled.current && shown.current !== index) {
       shown.current = index;
       ref.current?.scrollTo({ y: index * ITEM, animated: true });
     }
-  }, [index]);
+  }, [index, settle]);
 
   const end = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     settled.current = true;
