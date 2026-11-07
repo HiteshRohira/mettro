@@ -21,6 +21,8 @@ const GOOD_FIX_M = 150;
 const ON_ROUTE_KM = 0.3;
 /** Actual distance to a station for "we're at that station". */
 const AT_STATION_KM = 0.2;
+/** Arrival at the destination needs a closer fix: 200 m out the train can still be ~a minute away. */
+const AT_DESTINATION_KM = 0.12;
 /** Cached / delayed fixes older than this are ignored. */
 const MAX_FIX_AGE_MS = 60e3;
 /** A fix may move us along the timetable at most this much faster than real time (+ slack). */
@@ -344,7 +346,8 @@ async function syncActivity(trip: Trip, p: Progress) {
     if (inst) {
       if (p.phase === 'arrived') {
         await inst.end(after(new Date(Date.now() + 5 * 60e3)), props, new Date());
-        useTrip.getState().patch({ activityId: null, activityDismissed: true });
+        // ended by us (arrival), not dismissed by the user: it may start again if the trip resumes
+        useTrip.getState().patch({ activityId: null });
         lastPushed = '';
         return;
       }
@@ -451,34 +454,44 @@ function project(p: { lat: number; lng: number }, a: { lat: number; lng: number 
 type Candidate = { tau: number; idx: number; station: number | null; km: number };
 
 /**
- * Where on the route a fix puts us, in timetable time. Searches the whole route (so GPS can always
- * correct the clock, in either direction); among near-equal matches the one closest to the current
- * estimate wins, so a route passing the same area twice doesn't jump.
+ * Where on the route a fix puts us, in timetable time. The route is matched by geometry (closest
+ * segment), searched end to end so GPS can always correct the clock in either direction; among
+ * near-equal matches the one closest to the current estimate wins. A fix only counts as "at a
+ * station" when it's near an end of the segment it actually lies on — so a stop elsewhere on the
+ * route that happens to be nearby can't be confirmed by mistake.
  */
 function locate(trip: Trip, pts: TimelinePoint[], fix: Fix): Candidate | null {
   const last = pts.length - 1;
   const tauEst = fix.at - trip.delayMs;
   const better = (c: Candidate, best: Candidate | null) =>
     !best || c.km < best.km - 0.05 || (Math.abs(c.km - best.km) <= 0.05 && Math.abs(c.tau - tauEst) < Math.abs(best.tau - tauEst));
-  let best: Candidate | null = null;
-  // stations first: actual distance to the station, not along a segment
-  for (let i = 0; i <= last; i++) {
-    const s = getStation(pts[i].code);
-    const km = haversineKm(fix.lat, fix.lng, s.lat, s.lng);
-    if (km > AT_STATION_KM) continue;
+  const stationTau = (i: number) => {
     const same = trip.anchor ? trip.anchor.station === i : i === 0;
     // Same station as before (origin wait, dwell, interchange walk): we can only be later than
     // planned, never earlier. Newly reached: we're somewhere inside its [arrival, departure].
-    const tau = same ? Math.min(tauEst, pts[i].dep) : Math.min(pts[i].dep, Math.max(pts[i].at, tauEst));
-    const c = { tau, idx: i, station: i, km };
+    return same ? Math.min(tauEst, pts[i].dep) : Math.min(pts[i].dep, Math.max(pts[i].at, tauEst));
+  };
+  let best: Candidate | null = null;
+  const consider = (i: number, km: number, f: number) => {
+    const a = getStation(pts[i].code);
+    const b = getStation(pts[i + 1].code);
+    const dA = haversineKm(fix.lat, fix.lng, a.lat, a.lng);
+    const dB = haversineKm(fix.lat, fix.lng, b.lat, b.lng);
+    let c: Candidate;
+    if (dA <= AT_STATION_KM && dA <= dB) c = { tau: stationTau(i), idx: i, station: i, km };
+    else if (dB <= AT_STATION_KM) c = { tau: stationTau(i + 1), idx: i + 1, station: i + 1, km };
+    else c = { tau: pts[i].dep + f * (pts[i + 1].at - pts[i].dep), idx: i, station: null, km };
     if (better(c, best)) best = c;
-  }
-  if (best) return best;
+  };
   for (let i = 0; i < last; i++) {
     const r = project(fix, getStation(pts[i].code), getStation(pts[i + 1].code));
-    if (r.km > ON_ROUTE_KM) continue;
-    const c = { tau: pts[i].dep + r.f * (pts[i + 1].at - pts[i].dep), idx: i, station: null, km: r.km };
-    if (better(c, best)) best = c;
+    if (r.km <= ON_ROUTE_KM) consider(i, r.km, r.f);
+  }
+  // a single-station "route" can't happen (from !== to), but guard anyway
+  if (last === 0) {
+    const s = getStation(pts[0].code);
+    const km = haversineKm(fix.lat, fix.lng, s.lat, s.lng);
+    if (km <= AT_STATION_KM) best = { tau: stationTau(0), idx: 0, station: 0, km };
   }
   return best;
 }
@@ -509,9 +522,20 @@ export async function onFix(fix: Fix) {
   const prevAt = trip.anchor?.at ?? Math.max(trip.createdAt, Math.min(fix.at, trip.startedAt));
   const maxAdvance = Math.max(0, fix.at - prevAt) * MAX_PROGRESS_RATE + PROGRESS_SLACK_MS;
   if (c.tau - prevTau > maxAdvance) {
-    st.patch({ lastFix: fix });
-    await tick();
-    return;
+    // Too far ahead to have travelled since the last known position. Either a bad fix, or the
+    // rider started the trip already on board / after a long GPS gap: accept once a second fix
+    // agrees with this one (consistent position, moving no faster than a train).
+    const pending = trip.backPending;
+    const agrees =
+      !!pending &&
+      c.tau >= pending.tau - BACK_TOLERANCE_MS &&
+      c.tau - pending.tau <= Math.max(0, fix.at - pending.at) * MAX_PROGRESS_RATE + 2 * 60e3 &&
+      fix.at - pending.at >= 10e3;
+    if (!agrees) {
+      st.patch({ lastFix: fix, backPending: { tau: c.tau, idx: c.idx, station: c.station, at: fix.at } });
+      await tick();
+      return;
+    }
   }
   // Moving backwards needs a second agreeing fix.
   if (trip.anchor && c.tau < trip.anchor.tau - BACK_TOLERANCE_MS) {
@@ -524,10 +548,18 @@ export async function onFix(fix: Fix) {
   }
   const anchor: Anchor = { tau: c.tau, idx: c.idx, station: c.station, at: fix.at };
   const patch: Partial<Trip> = { lastFix: fix, anchor, backPending: null, offRoute: 0, delayMs: fix.at - c.tau };
-  if (c.station === last && !trip.arrivedAt) {
+  const dest = getStation(pts[last].code);
+  const atDest = c.station === last && haversineKm(fix.lat, fix.lng, dest.lat, dest.lng) <= AT_DESTINATION_KM;
+  if (c.station === last && !atDest) {
+    // approaching the destination: hold on the final stretch, don't call arrival yet
+    anchor.station = null;
+    anchor.idx = last - 1;
+    patch.anchor = anchor;
+  }
+  if (atDest && !trip.arrivedAt) {
     patch.arrivedAt = now;
     patch.arrivedBy = 'gps';
-  } else if (c.station !== last && trip.arrivedAt && trip.arrivedBy === 'time') {
+  } else if (!atDest && c.station !== last && trip.arrivedAt && trip.arrivedBy === 'time') {
     // the clock gave up too early: we're still riding
     patch.arrivedAt = null;
     patch.arrivedBy = null;

@@ -316,6 +316,42 @@ async function gps(fix: { lat: number; lng: number; acc: number; at: number }) {
   await resumeTracking();
   ok('day-old trip dropped on restore', !useTrip.getState().trip);
 
+  // ===== Sol review of #2 =====
+  // 1. a point on the Janpath→Central Secretariat segment near Patel Chowk must not confirm arrival
+  const jp = planOffline('JNPH', 'PTCK', 'fastest')!;
+  const jpts = buildTimeline(jp, t0);
+  ok(
+    'JNPH->PTCK changes at Central Secretariat',
+    jpts.some((q) => q.transfer && q.code === 'CTST'),
+    jpts.map((q) => q.code),
+  );
+  setNow(t0);
+  newTrip(jp, t0);
+  await gps(at('JNPH', t0 + 5e3));
+  await gps(between('JNPH', 'CTST', 0.23, t0 + 4 * 60e3));
+  ok('near-but-not-on-route destination not confirmed', !T().arrivedAt && T().anchor?.station !== jpts.length - 1, T().anchor);
+
+  // 2. rider already on board mid-route is placed after two consistent fixes
+  const rh = planOffline('RCK', 'HCC', 'fastest')!;
+  const rhp = buildTimeline(rh, t0);
+  const mid = rhp[Math.floor(rhp.length / 2)].code;
+  setNow(t0);
+  newTrip(rh, t0);
+  await gps(at(mid, t0 + 20e3));
+  ok('first far fix held', !T().anchor);
+  await gps(at(mid, t0 + 60e3));
+  ok('second consistent fix places the rider', T().anchor?.station === Math.floor(rhp.length / 2), T().anchor);
+
+  // 3. a trip that timed out and is resumed by GPS can show its Live Activity again
+  setNow(t0);
+  newTrip(rk, t0, { activityId: null, activityDismissed: false });
+  pts = buildTimeline(rk, t0);
+  setNow(pts.at(-1)!.at + 11 * 60e3);
+  await tick();
+  await gps(at(pts[pts.length - 2].code, Date.now() + 5e3));
+  await gps(at(pts[pts.length - 2].code, Date.now() + 20e3));
+  ok('resumed trip not marked dismissed', !T().arrivedAt && !T().activityDismissed, T());
+
   Date.now = realNow;
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
