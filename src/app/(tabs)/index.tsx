@@ -93,7 +93,7 @@ export default function PlanScreen() {
             <Press
               onPress={() => setShowTime((v) => !v)}
               hitSlop={8}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minHeight: 32 }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minHeight: 44 }}
               accessibilityLabel="Departure time"
               accessibilityState={{ expanded: showTime }}>
               <Icon name="clock" size={13} color={when ? c.text : c.text3} />
@@ -108,7 +108,7 @@ export default function PlanScreen() {
                   set({ when: null });
                   setShowTime(false);
                 }}
-                hitSlop={8}>
+                style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }}>
                 <T v="label" color={c.accent}>
                   Reset
                 </T>
@@ -149,7 +149,7 @@ export default function PlanScreen() {
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 6,
-                  height: 36,
+                  minHeight: 44,
                   paddingHorizontal: 14,
                   borderRadius: radius.pill,
                   backgroundColor: c.surface,

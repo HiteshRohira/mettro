@@ -153,20 +153,14 @@ FIX = {
 for c, st in stations.items():
     st['name'] = FIX.get(st['name'], st['name'])
 
-# DMRC coordinates that are wrong (duplicated or far off); corrected from OpenStreetMap station nodes.
-COORD_OVERRIDES = {
-    'KPEN': (28.6477917, 77.0843425),  # DMRC copies Janakpuri West's position
-    'DM': (28.61931, 77.0332792),      # DMRC point is ~0.8 km east of the station
-    # DMRC points 0.5–1.3 km from the station (beyond the app's 450 m GPS snap radius)
-    'KKDC': (28.6536, 77.29579),
-    'RISE': (28.73838, 77.13985),
-    'METE': (28.51958, 77.2946),
-    'JGPI': (28.72597, 77.16266),
-    'RJBH': (28.67709, 77.34683),
-}
-for c, (la, lo) in COORD_OVERRIDES.items():
-    if c in stations:
-        stations[c]['lat'], stations[c]['lng'] = la, lo
+# Geography is maintained separately from the DMRC snapshot: its coarse/incorrect
+# station positions must not overwrite reviewed OSM station/stop coordinates.
+geo_path = os.path.join(os.path.dirname(__file__), '../src/data/delhi/geography.json')
+with open(geo_path) as f:
+    geography = json.load(f)
+for code, position in geography['stations'].items():
+    if code in stations:
+        stations[code].update(position)
 # add neighbour-referenced codes that exist
 for lid in adj:
     adj[lid] = {e for e in adj[lid] if e[0] in stations and e[1] in stations}

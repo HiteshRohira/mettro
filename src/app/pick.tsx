@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Divider, Icon, LineDots, Press, T } from '@/components/ui';
+import { Divider, Icon, IconButton, LineDots, Press, T } from '@/components/ui';
 import { getStation, nearestStations, searchStations, stationColors, type Station } from '@/lib/network';
 import { locate, useNearest } from '@/lib/useLocation';
 import { usePlanner } from '@/store/planner';
@@ -34,13 +34,10 @@ export default function PickScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: c.bg, paddingTop: 20 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 20 }}>
         <T v="title">{label}</T>
-        <Press
+        <IconButton
           onPress={() => router.back()}
-          hitSlop={10}
           accessibilityLabel="Close station search"
-          style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="xmark" size={13} color={c.text2} />
-        </Press>
+          style={{ borderRadius: 22, backgroundColor: c.surface2 }} icon="xmark" size={18} color={c.text2} />
       </View>
       <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
         <View

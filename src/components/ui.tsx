@@ -66,6 +66,18 @@ export function Press({ style, onPress, haptic = true, ...rest }: PressableProps
   );
 }
 
+/** Real layout bounds keep adjacent icon targets separate; hitSlop alone cannot
+ * expand beyond a small native toolbar parent. */
+export function IconButton({ icon, size = 22, color, style, ...props }: Omit<React.ComponentProps<typeof Press>, 'children'> & {
+  icon: SymbolViewProps['name']; size?: number; color?: string; accessibilityLabel: string;
+}) {
+  return (
+    <Press {...props} style={[{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, style, { minWidth: 44, minHeight: 44 }]}>
+      <Icon name={icon} size={size} color={color} />
+    </Press>
+  );
+}
+
 export function Button({
   title,
   onPress,
@@ -151,7 +163,7 @@ export function SectionHeader({ title, action, onAction, style }: { title: strin
       style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 30, marginBottom: 10, paddingHorizontal: 4 }, style]}>
       <T v="h3">{title}</T>
       {action ? (
-        <Press onPress={onAction} hitSlop={10}>
+        <Press onPress={onAction} style={{ minHeight: 44, minWidth: 44, alignItems: 'flex-end', justifyContent: 'center' }}>
           <T v="label" color={c.accent}>
             {action}
           </T>

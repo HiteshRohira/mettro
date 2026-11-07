@@ -24,7 +24,7 @@ export function JourneyLegs({ j }: { j: Journey }) {
 function StationNode({ code, color, big, time, sub }: { code: string; color: string; big?: boolean; time?: string | null; sub?: string }) {
   const { c } = useTheme();
   return (
-    <Press onPress={() => router.push({ pathname: '/station/[code]', params: { code } })} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 30 }}>
+    <Press onPress={() => router.push({ pathname: '/station/[code]', params: { code } })} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44 }}>
       <View style={{ width: 52, alignItems: 'flex-end', paddingRight: 10 }}>
         {time ? (
           <T v="label" style={{ fontVariant: ['tabular-nums'] }}>
@@ -86,7 +86,7 @@ function LegBlock({ leg, first, last }: { leg: Leg; first: boolean; last: boolea
             accessibilityState={{ expanded: open }}
             disabled={!mids.length}
             onPress={() => setOpen((v) => !v)}
-            style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 }}
             hitSlop={6}>
             <T v="caption" faint>
               {stops} stop{stops === 1 ? '' : 's'}
@@ -99,7 +99,7 @@ function LegBlock({ leg, first, last }: { leg: Leg; first: boolean; last: boolea
                 <Press
                   key={code}
                   onPress={() => router.push({ pathname: '/station/[code]', params: { code } })}
-                  style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: -26 }}>
+                  style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: -26 }}>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.surface, borderWidth: 2, borderColor: line.color }} />
                   <T v="caption" dim style={{ marginLeft: 14, flex: 1 }}>
                     {getStation(code).name}

@@ -33,6 +33,7 @@ Built with Expo SDK 58, React Native 0.88 and Expo Router. Text is set in Inter.
 - **Live trip tracking**: stop-by-stop progress that blends GPS with the timetable (useful underground). You can tap any station to correct your position.
 - **Live Activity**: shows the next station, a countdown, your arrival time, where to change trains and when to get off. It appears on the Lock Screen and in the Dynamic Island.
 - **First & last trains** for every station, in every direction (544 direction timings).
+- **Station navigation**: choose Apple Maps or Google Maps for directions to the reviewed station coordinates. Google Maps falls back to its website when the app is unavailable. Coordinates represent stations/platforms, not specific entrance gates.
 - **Station details**: platforms, gates (with live open/closed status), lifts and escalators, toilets, ATMs and other facilities, parking, feeder buses, nearby places, and phone numbers.
 - **Nearby stations** with walking time and the last train from each.
 - **Network map** on Apple Maps, with a toggle for each line.
@@ -51,7 +52,7 @@ To install on an iPhone, see **[docs/SIDELOADING.md](docs/SIDELOADING.md)**.
 
 ## Data
 
-All data comes from DMRC's public website API (`backend.delhimetrorail.com/api/v2/en`):
+Service, routing and station-detail data comes from DMRC's public website API (`backend.delhimetrorail.com/api/v2/en`):
 
 | Data | Source | When |
 |---|---|---|
@@ -71,6 +72,19 @@ python3 -I scripts/fetch_delhi_timings.py $RAW src/data/delhi/network.json   # c
 python3 -I scripts/build_delhi_graph.py   $RAW src/data/delhi   # merge timings
 python3 -I scripts/harvest_delhi_edges.py $RAW src/data/delhi/network.json   # cross-check edges against the planner
 ```
+
+Station coordinates and map track alignments use [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright), licensed under [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/). They are bundled for offline use in `geography.json`; `station-osm.json` records the reviewed station/stop node ID and source name for every station. Regeneration rejects changed identities, non-metro nodes and duplicate positions for review. Interchanges use a representative station position, rather than individual entrances or platforms.
+
+Refresh the geography directly from the OpenStreetMap API:
+
+```bash
+python3 scripts/download_delhi_geography.py /tmp/delhi-osm.json
+python3 scripts/build_delhi_geography.py /tmp/delhi-osm.json
+python3 -I scripts/build_delhi_graph.py /tmp/dmrc src/data/delhi
+npm test
+```
+
+The graph builder reapplies reviewed coordinates after importing DMRC data. When adding stations or changing routing edges, update the OSM node mapping and route relation IDs, regenerate both datasets, and run the geography checks. Map edges must have track shapes with endpoints at the corrected stations. The snapshot date is recorded in `geography.json`.
 
 The app also checks DMRC's station count in the background, and shows a notice in *More* when new stations appear.
 

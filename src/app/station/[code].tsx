@@ -1,12 +1,13 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActionSheetIOS, Linking, ScrollView, View } from 'react-native';
+import { ActionSheetIOS, Alert, Linking, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Disclosure, Divider, Icon, LineChip, Press, SectionHeader, T } from '@/components/ui';
+import { Button, Card, Disclosure, Divider, Icon, IconButton, LineChip, Press, SectionHeader, T } from '@/components/ui';
 import { fetchStationLive, type StationLive } from '@/lib/api';
 import { getDetails } from '@/lib/details';
 import { hm, shortPlatform } from '@/lib/format';
+import { stationDirectionsUrls } from '@/lib/navigation';
 import { directionsAt, getLine, lineLabel, linesOf, stationByCode, titleTowards } from '@/lib/network';
 import { usePlanner } from '@/store/planner';
 import { useSettings } from '@/store/settings';
@@ -59,6 +60,31 @@ export default function StationScreen() {
   const alerts = live?.status?.length ? live.status : (d?.status ?? []);
   const brokenLifts = d?.lifts.filter((l) => !l.ok) ?? [];
   const call = (n: string) => Linking.openURL(`tel:${n}`);
+  const navigate = () => {
+    const urls = stationDirectionsUrls(s);
+    const open = async (url: string) => {
+      try {
+        await Linking.openURL(url);
+      } catch {
+        Alert.alert('Could not open Maps', 'Please try again or choose the other maps app.');
+      }
+    };
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { title: `Navigate to ${s.name}`, options: ['Apple Maps', 'Google Maps', 'Cancel'], cancelButtonIndex: 2 },
+        (index) => {
+          if (index === 0) void open(urls.apple);
+          if (index === 1) void open(urls.google);
+        },
+      );
+    } else {
+      Alert.alert(`Navigate to ${s.name}`, 'Choose a maps app', [
+        { text: 'Apple Maps', onPress: () => void open(urls.apple) },
+        { text: 'Google Maps', onPress: () => void open(urls.google) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  };
 
   type Section = { title: string; detail?: string; tone?: 'danger'; body: React.ReactNode };
   const sections: Section[] = [];
@@ -142,12 +168,18 @@ export default function StationScreen() {
     });
 
   const more = () => {
-    const opts = ['Set as Home', 'Set as Work', 'Open in Maps', 'Cancel'];
-    ActionSheetIOS.showActionSheetWithOptions({ options: opts, cancelButtonIndex: 3, title: s.name }, (i) => {
-      if (i === 0) useSettings.getState().set({ home: code });
-      if (i === 1) useSettings.getState().set({ work: code });
-      if (i === 2) Linking.openURL(`http://maps.apple.com/?ll=${s.lat},${s.lng}&q=${encodeURIComponent(s.name + ' Metro Station')}`);
-    });
+    const actions = [
+      { text: 'Set as Home', onPress: () => useSettings.getState().set({ home: code }) },
+      { text: 'Set as Work', onPress: () => useSettings.getState().set({ work: code }) },
+      { text: 'Navigate to', onPress: navigate },
+    ];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions({ options: [...actions.map((a) => a.text), 'Cancel'], cancelButtonIndex: 3, title: s.name }, (i) => {
+        actions[i]?.onPress();
+      });
+    } else {
+      Alert.alert(s.name, undefined, actions);
+    }
   };
 
   return (
@@ -156,13 +188,10 @@ export default function StationScreen() {
         options={{
           title: '',
           headerRight: () => (
-            <View style={{ flexDirection: 'row', gap: 18 }}>
-              <Press onPress={() => useSettings.getState().toggleFav(code)} hitSlop={8} accessibilityLabel={fav ? 'Remove from saved' : 'Save station'}>
-                <Icon name={fav ? 'star.fill' : 'star'} size={20} color={fav ? '#F5B301' : c.text} />
-              </Press>
-              <Press onPress={more} hitSlop={8} accessibilityLabel="More">
-                <Icon name="ellipsis.circle" size={20} />
-              </Press>
+            <View style={{ flexDirection: 'row', gap: 4 }}>
+              <IconButton onPress={() => useSettings.getState().toggleFav(code)} accessibilityLabel={fav ? 'Remove from saved' : 'Save station'}
+                accessibilityState={{ selected: fav }} icon={fav ? 'star.fill' : 'star'} size={24} color={fav ? '#F5B301' : c.text} />
+              <IconButton onPress={more} accessibilityLabel="More" icon="ellipsis.circle" size={24} />
             </View>
           ),
         }}
@@ -173,7 +202,7 @@ export default function StationScreen() {
         </T>
         <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap', marginTop: 10 }}>
           {lines.map((l) => (
-            <Press key={l.id} onPress={() => router.push({ pathname: '/line/[id]', params: { id: l.id } })}>
+            <Press key={l.id} style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => router.push({ pathname: '/line/[id]', params: { id: l.id } })}>
               <LineChip line={l} label={lineLabel(l)} />
             </Press>
           ))}
@@ -200,6 +229,8 @@ export default function StationScreen() {
             }}
           />
         </View>
+
+        <Button title="Navigate to" icon="location" kind="secondary" style={{ marginTop: 10 }} onPress={navigate} />
 
         {alerts.length || lines.some((l) => !isNormal(lineStatus[l.id])) || closedGates.length ? (
           <Card style={{ marginTop: 16, backgroundColor: c.warnSoft, borderColor: 'transparent', gap: 6 }}>
@@ -307,7 +338,7 @@ function Item({ title, sub, icon, bad, onPress }: { title: string; sub?: string;
       </View>
     </View>
   );
-  return onPress ? <Press onPress={onPress}>{body}</Press> : body;
+  return onPress ? <Press onPress={onPress} style={{ minHeight: 44, justifyContent: 'center' }}>{body}</Press> : body;
 }
 
 function Nearby({ items }: { items: NonNullable<ReturnType<typeof getDetails>>['nearby'] }) {
@@ -326,7 +357,7 @@ function Nearby({ items }: { items: NonNullable<ReturnType<typeof getDetails>>['
     <View>
       {groups.map(([k, list]) => (
         <View key={k}>
-          <Press onPress={() => setOpen(open === k ? null : k)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 }}>
+          <Press onPress={() => setOpen(open === k ? null : k)} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingVertical: 8, gap: 10 }}>
             <T v="label" style={{ flex: 1 }}>
               {k}
             </T>

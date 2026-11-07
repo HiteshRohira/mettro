@@ -79,7 +79,7 @@ export default function MoreScreen() {
                     flex: 1,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    minHeight: 40,
+                    minHeight: 44,
                     borderRadius: radius.pill,
                     backgroundColor: s.appearance === a ? c.raised : 'transparent',
                   }}>

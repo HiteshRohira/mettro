@@ -159,7 +159,7 @@ export default function TripScreen() {
               hitSlop={6}
               accessibilityLabel={showAll ? 'Show fewer stops' : 'Show all stops'}
               accessibilityState={{ expanded: showAll }}
-              style={{ alignItems: 'center', justifyContent: 'center', height: 28, marginTop: -8 }}>
+              style={{ alignItems: 'center', justifyContent: 'center', minHeight: 44 }}>
               <Icon name={showAll ? 'chevron.up' : 'chevron.down'} size={14} color={c.text3} />
             </Press>
           ) : null}

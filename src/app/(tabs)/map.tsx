@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
 import { memo, useMemo, useRef, useState } from 'react';
-import { Text as RNText, View } from 'react-native';
+import { Linking, Text as RNText, View } from 'react-native';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, Icon, LineDots, Press, T } from '@/components/ui';
+import { Card, Icon, IconButton, LineDots, Press, T } from '@/components/ui';
 import { fmtKm, walkMin } from '@/lib/format';
-import { EDGES, getStation, haversineKm, LINES, lineById, lineLabel, STATIONS, stationColors, type Station } from '@/lib/network';
+import { MAP_EDGES } from '@/lib/mapGeometry';
+import { getStation, haversineKm, LINES, lineById, lineLabel, STATIONS, stationColors, type Station } from '@/lib/network';
 import { locate, useNearest } from '@/lib/useLocation';
 import { usePlanner } from '@/store/planner';
 import { radius, useTheme } from '@/theme';
@@ -16,27 +17,18 @@ const DELHI: Region = { latitude: 28.6139, longitude: 77.209, latitudeDelta: 0.3
 const Lines = memo(function Lines({ hidden }: { hidden: Set<string> }) {
   return (
     <>
-      {EDGES.filter((e) => !hidden.has(e.line)).map((e) => {
-        const a = getStation(e.a);
-        const b = getStation(e.b);
-        return (
-          <Polyline
-            key={`${e.line}-${e.a}-${e.b}`}
-            coordinates={[
-              { latitude: a.lat, longitude: a.lng },
-              { latitude: b.lat, longitude: b.lng },
-            ]}
-            strokeColor={lineById.get(e.line)!.color}
-            strokeWidth={4}
-            lineCap="round"
-          />
-        );
-      })}
+      {MAP_EDGES.filter((e) => !hidden.has(e.line)).map((e) => (
+        <Polyline
+          key={e.key}
+          coordinates={e.coordinates}
+          strokeColor={lineById.get(e.line)!.color}
+          strokeWidth={4}
+          lineCap="round"
+        />
+      ))}
     </>
   );
 });
-
-const DOT_BOX = 16;
 
 const Stations = memo(function Stations({ onSelect, hidden }: { onSelect: (s: Station) => void; hidden: Set<string> }) {
   return (
@@ -47,21 +39,15 @@ const Stations = memo(function Stations({ onSelect, hidden }: { onSelect: (s: St
           coordinate={{ latitude: s.lat, longitude: s.lng }}
           tracksViewChanges={false}
           anchor={{ x: 0.5, y: 0.5 }}
+          centerOffset={{ x: 0, y: 0 }}
           zIndex={2}
           onPress={() => onSelect(s)}>
-          {/* Same square box for every dot so iOS gives every marker the same frame and centre:
-              differently sized custom views were drawn slightly off their station. */}
-          <View style={{ width: DOT_BOX, height: DOT_BOX, alignItems: 'center', justifyContent: 'center' }}>
-            <View
-              style={{
-                width: s.interchange ? 12 : 9,
-                height: s.interchange ? 12 : 9,
-                borderRadius: 6,
-                backgroundColor: '#FFFFFF',
-                borderWidth: s.interchange ? 2.5 : 2,
-                borderColor: s.interchange ? '#111111' : lineById.get(s.lines[0])!.color,
-              }}
-            />
+          {/* Preserve the 16pt native frame: flattening this wrapper offsets the
+              inner dot relative to MapKit's annotation coordinate. */}
+          <View collapsable={false} style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: s.interchange ? 12 : 9, height: s.interchange ? 12 : 9, borderRadius: 6,
+              backgroundColor: '#FFFFFF', borderWidth: s.interchange ? 2.5 : 2,
+              borderColor: s.interchange ? '#111111' : lineById.get(s.lines[0])!.color }} />
           </View>
         </Marker>
       ))}
@@ -203,6 +189,15 @@ export default function MapScreen() {
         <Labels codes={labeled} dark={dark} />
       </MapView>
 
+      <Press
+        accessibilityLabel="Map data copyright OpenStreetMap contributors"
+        onPress={() => Linking.openURL('https://www.openstreetmap.org/copyright')}
+        haptic={false}
+        style={{ position: 'absolute', bottom: insets.bottom + 34, left: 10, paddingHorizontal: 4, paddingVertical: 2,
+          borderRadius: 3, backgroundColor: dark ? '#14171BDD' : '#FFFFFFDD' }}>
+        <RNText style={{ fontSize: 10, lineHeight: 12, color: dark ? '#D1D5DB' : '#374151' }}>© OpenStreetMap</RNText>
+      </Press>
+
       {showFilter ? (
         <Card
           onLayout={(e) => setPanelH(e.nativeEvent.layout.height)}
@@ -211,9 +206,7 @@ export default function MapScreen() {
             <T v="h3" style={{ flex: 1 }}>
               Show lines
             </T>
-            <Press onPress={() => setShowFilter(false)} hitSlop={10} accessibilityLabel="Close">
-              <Icon name="xmark" size={14} color={c.text2} />
-            </Press>
+            <IconButton onPress={() => setShowFilter(false)} accessibilityLabel="Close line filters" icon="xmark" size={18} color={c.text2} />
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <FilterChip label="All lines" on={!only.length} onPress={showAll} />
@@ -301,9 +294,7 @@ export default function MapScreen() {
                   {selKm}
                 </T>
               ) : null}
-              <Press onPress={() => setSel(null)} hitSlop={10} accessibilityLabel="Close">
-                <Icon name="xmark.circle.fill" size={20} color={c.text3} />
-              </Press>
+              <IconButton onPress={() => setSel(null)} accessibilityLabel="Close station preview" icon="xmark.circle.fill" color={c.text3} />
             </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Press
@@ -311,7 +302,7 @@ export default function MapScreen() {
                   usePlanner.getState().set({ from: sel.code, fromIsLocation: false });
                   router.navigate('/');
                 }}
-                style={{ flex: 1, height: 40, borderRadius: radius.md, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
+                style={{ flex: 1, minHeight: 44, borderRadius: radius.md, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
                 <T v="label">From here</T>
               </Press>
               <Press
@@ -321,7 +312,7 @@ export default function MapScreen() {
                   if (p.from && p.from !== sel.code) router.push({ pathname: '/journey', params: { from: p.from, to: sel.code } });
                   else router.navigate('/');
                 }}
-                style={{ flex: 1, height: 40, borderRadius: radius.md, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}>
+                style={{ flex: 1, minHeight: 44, borderRadius: radius.md, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}>
                 <T v="label" color={c.onInk}>
                   Go here
                 </T>
@@ -357,7 +348,7 @@ function FilterChip({ label, color, on, onPress }: { label: string; color?: stri
         alignItems: 'center',
         gap: 7,
         paddingHorizontal: 12,
-        minHeight: 36,
+        minHeight: 44,
         borderRadius: radius.pill,
         backgroundColor: on ? c.ink : c.surface2,
       }}>
