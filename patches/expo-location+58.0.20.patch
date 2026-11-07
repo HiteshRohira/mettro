@@ -1,0 +1,94 @@
+diff --git a/node_modules/expo-location/android/src/main/java/expo/modules/location/LocationModule.kt b/node_modules/expo-location/android/src/main/java/expo/modules/location/LocationModule.kt
+index 8088ec6..a8eb5fc 100644
+--- a/node_modules/expo-location/android/src/main/java/expo/modules/location/LocationModule.kt
++++ b/node_modules/expo-location/android/src/main/java/expo/modules/location/LocationModule.kt
+@@ -339,6 +339,21 @@ class LocationModule : Module(), SensorEventListener, ActivityEventListener {
+       return@AsyncFunction
+     }
+ 
++    // Mettro: update the foreground-service notification (trip progress) without restarting the task.
++    AsyncFunction("updateForegroundNotificationAsync") { options: Map<String, Any?> ->
++      val service = expo.modules.location.services.LocationTaskService.current ?: return@AsyncFunction false
++      val bundle = android.os.Bundle()
++      for ((key, value) in options) {
++        when (value) {
++          is String -> bundle.putString(key, value)
++          is Number -> bundle.putDouble(key, value.toDouble())
++          is Boolean -> bundle.putBoolean(key, value)
++        }
++      }
++      service.updateNotification(bundle)
++      return@AsyncFunction true
++    }
++
+     AsyncFunction("stopLocationUpdatesAsync") { taskName: String ->
+       mTaskManager.unregisterTask(taskName, LocationTaskConsumer::class.java)
+       return@AsyncFunction
+diff --git a/node_modules/expo-location/android/src/main/java/expo/modules/location/services/LocationTaskService.kt b/node_modules/expo-location/android/src/main/java/expo/modules/location/services/LocationTaskService.kt
+index 8f13054..03b5d78 100644
+--- a/node_modules/expo-location/android/src/main/java/expo/modules/location/services/LocationTaskService.kt
++++ b/node_modules/expo-location/android/src/main/java/expo/modules/location/services/LocationTaskService.kt
+@@ -60,6 +60,7 @@ class LocationTaskService : Service() {
+ 
+   override fun onDestroy() {
+     isPromoted = false
++    if (current === this) current = null
+     super.onDestroy()
+   }
+ 
+@@ -74,6 +75,14 @@ class LocationTaskService : Service() {
+     val notification = buildServiceNotification(serviceOptions)
+     startForeground(mServiceId, notification)
+     isPromoted = true
++    current = this
++  }
++
++  /** Mettro: refresh the ongoing notification's content (trip progress), like a Live Activity update. */
++  fun updateNotification(serviceOptions: Bundle) {
++    if (!isPromoted) return
++    val manager = getSystemService(NOTIFICATION_SERVICE) as? NotificationManager ?: return
++    manager.notify(mServiceId, buildServiceNotification(serviceOptions))
+   }
+ 
+   //region private
+@@ -87,10 +96,25 @@ class LocationTaskService : Service() {
+ 
+     title?.let { builder.setContentTitle(title) }
+     body?.let { builder.setContentText(body) }
+-    color?.let {
+-      builder.setColorized(true).setColor(color)
+-    } ?: run {
+-      builder.setColorized(false)
++    // Mettro: accent colour only (not a colorized background), plus optional live-trip extras
++    color?.let { builder.setColor(color) }
++    builder.setColorized(false).setOnlyAlertOnce(true).setOngoing(true)
++    serviceOptions.getString("notificationSubText")?.let { builder.setSubText(it) }
++    serviceOptions.getString("notificationBigText")?.let { builder.setStyle(Notification.BigTextStyle().bigText(it)) }
++    if (serviceOptions.containsKey("notificationProgress")) {
++      val progress = (serviceOptions.getDouble("notificationProgress") * 1000).toInt().coerceIn(0, 1000)
++      builder.setProgress(1000, progress, false)
++    }
++    if (serviceOptions.containsKey("notificationCountdownTo")) {
++      val target = serviceOptions.getDouble("notificationCountdownTo").toLong()
++      if (target > System.currentTimeMillis()) {
++        builder.setWhen(target).setShowWhen(true).setUsesChronometer(true)
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) builder.setChronometerCountDown(true)
++      } else {
++        builder.setShowWhen(false)
++      }
++    } else {
++      builder.setShowWhen(false)
+     }
+ 
+     packageManager.getLaunchIntentForPackage(packageName)?.let {
+@@ -160,6 +184,10 @@ class LocationTaskService : Service() {
+   companion object {
+     private const val TAG = "LocationTaskService"
+     private var sServiceId = 481756
++
++    /** Mettro: the promoted service, so JS can update its notification. */
++    @Volatile
++    var current: LocationTaskService? = null
+     const val META_DATA_FOREGROUND_SERVICE_ICON_KEY: String =
+       "expo.modules.location.foreground_service_icon"
+ 

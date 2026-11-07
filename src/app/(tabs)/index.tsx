@@ -1,4 +1,4 @@
-import { DatePicker, Host } from '@expo/ui/swift-ui';
+import { TimePicker } from '@/components/platform/time-picker';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
@@ -117,14 +117,7 @@ export default function PlanScreen() {
           </View>
           {showTime ? (
             <View style={{ paddingHorizontal: 12, paddingBottom: 12, alignItems: 'flex-start' }}>
-              <Host matchContents colorScheme={scheme}>
-                <DatePicker
-                  selection={new Date(when ?? now)}
-                  displayedComponents={['date', 'hourAndMinute']}
-                  range={{ start: new Date(now - 3600e3) }}
-                  onDateChange={(d) => set({ when: d.getTime() })}
-                />
-              </Host>
+              <TimePicker value={when} now={now} onChange={(ms) => set({ when: ms })} scheme={scheme} />
             </View>
           ) : null}
           <Button

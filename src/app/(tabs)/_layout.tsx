@@ -1,11 +1,18 @@
+import { Platform } from 'react-native';
 import { NativeTabs } from 'expo-router/native-tabs';
 
-import { useTheme } from '@/theme';
+import { font, useTheme } from '@/theme';
 
 export default function TabsLayout() {
   const { c } = useTheme();
   return (
-    <NativeTabs tintColor={c.text} labelStyle={{ fontFamily: 'Inter-Medium', fontSize: 10 }}>
+    <NativeTabs
+      tintColor={c.text}
+      labelStyle={{ fontFamily: font.medium, fontSize: 10 }}
+      // Android: keep the iOS look (no Material pill indicator or ripple, labels always on).
+      {...(Platform.OS === 'android'
+        ? { disableIndicator: true, rippleColor: 'transparent', labelVisibilityMode: 'labeled' as const, backgroundColor: c.surface, iconColor: c.text3 }
+        : null)}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Plan</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon

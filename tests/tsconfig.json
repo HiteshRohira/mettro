@@ -10,6 +10,7 @@
       "expo-background-task": ["./stubs/empty.ts"],
       "react-native": ["./stubs/react-native.ts"],
       "expo-widgets": ["./stubs/expo-widgets.ts"],
+      "expo-modules-core": ["./stubs/expo-modules-core.ts"],
       "@react-native-async-storage/async-storage": ["./stubs/async-storage.ts"]
     }
   }

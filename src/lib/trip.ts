@@ -8,6 +8,7 @@ import { getLine, getStation, haversineKm, lineLabel, onLineColor } from '@/lib/
 import { INTERCHANGE_SECONDS, type Journey } from '@/lib/router';
 import { checkServiceHours } from '@/lib/service';
 import { clockToEpoch, istClock } from '@/lib/time';
+import { ensureNotificationPermission, tripNotificationContent, updateTripNotification } from '@/lib/tripNotification';
 import { useSettings } from '@/store/settings';
 import { useTrip, type Anchor, type Fix, type Trip } from '@/store/trip';
 import TripActivity, { type TripActivityProps } from '@/widgets/TripActivity';
@@ -305,6 +306,7 @@ function staleDate(trip: Trip, p: Progress, now = Date.now()) {
 
 // ---------- Live Activity ----------
 let lastPushed = '';
+let lastPushedAt = 0;
 let createdAt = 0;
 let missing = 0;
 
@@ -318,6 +320,19 @@ function activityLookup(id: string | null) {
 }
 
 async function syncActivity(trip: Trip, p: Progress) {
+  if (Platform.OS === 'android') {
+    // The location service's ongoing notification is Android's Live Activity.
+    if (trip.tracking !== 'background') return;
+    const props = activityProps(trip, p);
+    const key = JSON.stringify({ ...props, progress: Math.round(props.progress * 50) });
+    // also re-post every minute: a post made before the notification permission was granted stays hidden
+    if (key === lastPushed && Date.now() - lastPushedAt < 60e3) return;
+    if (await updateTripNotification(props)) {
+      lastPushed = key;
+      lastPushedAt = Date.now();
+    }
+    return;
+  }
   if (Platform.OS !== 'ios') return;
   if (!useSettings.getState().liveActivities) {
     // setting turned off mid-trip: clean up whatever is showing
@@ -385,6 +400,46 @@ async function startLocation(ask: boolean): Promise<LocationMode> {
   try {
     const fg = ask ? await Location.requestForegroundPermissionsAsync() : await Location.getForegroundPermissionsAsync();
     if (fg.status !== 'granted') return 'denied';
+    if (Platform.OS === 'android') {
+      // Android keeps tracking in the background through a foreground service, which must show an
+      // ongoing notification: that notification is the trip's Live Activity. No "Allow all the
+      // time" permission is needed. Off in settings → foreground-only tracking.
+      if (useSettings.getState().liveActivities) {
+        const trip = useTrip.getState().trip;
+        const props = trip ? activityProps(trip, computeProgress(trip, Date.now())) : null;
+        const started = await Location.hasStartedLocationUpdatesAsync(TRIP_LOCATION_TASK).catch(() => false);
+        if (started) {
+          // Android restores the task after a restart but not its foreground service (no
+          // notification, no background updates): restart it when there's nothing to update.
+          if (!props || (await updateTripNotification(props))) return 'background';
+          await Location.stopLocationUpdatesAsync(TRIP_LOCATION_TASK).catch(() => {});
+        }
+        await ensureNotificationPermission(ask);
+        const initial = props ? tripNotificationContent(props) : {};
+        try {
+          await Location.startLocationUpdatesAsync(TRIP_LOCATION_TASK, {
+            accuracy: Location.Accuracy.High,
+            distanceInterval: 80,
+            timeInterval: 15000,
+            foregroundService: {
+              notificationTitle: String(initial.notificationTitle ?? 'Trip in progress'),
+              notificationBody: String(initial.notificationBody ?? 'Mettro is following your trip'),
+              notificationColor: initial.notificationColor ? String(initial.notificationColor) : undefined,
+              killServiceOnDestroy: false,
+            },
+          });
+          lastPushed = '';
+          return 'background';
+        } catch (e) {
+          // e.g. started while the app is in the background: fall back to foreground tracking
+          console.warn('trip service', e);
+        }
+      }
+      fgSub ??= await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 80, timeInterval: 15000 }, (loc) =>
+        onFix({ lat: loc.coords.latitude, lng: loc.coords.longitude, acc: loc.coords.accuracy ?? 999, at: loc.timestamp }),
+      );
+      return 'foreground';
+    }
     let bgOk = false;
     try {
       const bg = ask ? await Location.requestBackgroundPermissionsAsync() : await Location.getBackgroundPermissionsAsync();
@@ -703,6 +758,13 @@ useSettings.subscribe((s, prev) => {
   if (prev.liveActivities && !s.liveActivities) {
     endAllActivities().catch(() => {});
     useTrip.getState().patch({ activityId: null });
+  }
+  // Android: the setting decides between the notification-backed service and foreground-only GPS.
+  if (Platform.OS === 'android' && prev.liveActivities !== s.liveActivities && useTrip.getState().trip) {
+    stopLocation()
+      .then(() => resumeTracking())
+      .then(() => tick())
+      .catch(() => {});
   }
 });
 
