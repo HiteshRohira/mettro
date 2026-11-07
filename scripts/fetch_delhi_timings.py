@@ -52,24 +52,26 @@ def dep(a, b, date, minute):
     return s
 
 def crawl(pair):
-    a, b, line = pair
-    r = get(a, b, f'{day}T02:00:00.000')
+    # q = station queried: b itself, or the next station after b on `line` for track
+    # shared by two lines (so the planner must answer with that line's trains)
+    a, b, line, q = pair
+    r = get(a, q, f'{day}T02:00:00.000')
     l = leg(r)
     if not l: return pair, None
     res = {
         'line': line, 'to': l.get('towards_station'), 'platform': l.get('platform_name'),
         'first': l.get('new_start_time'), 'path': l.get('map-path'), 'nstations': r.get('stations'),
-        'edge_s': hms(l.get('path_time')), 'fare': r.get('fare'), 'line_name': l.get('line'),
+        'edge_s': hms(l.get('path_time')), 'fare': r.get('fare'), 'line_name': l.get('line'), 'line_no': l.get('line_no'), 'via': q if q != b else None,
     }
     # last train: largest minute m in [20:00, 23:59] where dep valid and >= m*60
     def ok(m):
-        s = dep(a, b, day, m)
+        s = dep(a, q, day, m)
         return s is not None and s >= m * 60
     lo, hi = 20 * 60, 23 * 60 + 59
     if ok(hi):
         # runs past midnight: search next day 00:00-02:30
         def ok2(m):
-            s = dep(a, b, nxt, m)
+            s = dep(a, q, nxt, m)
             return s is not None and s < 3 * 3600 and s >= m * 60
         if ok2(0):
             lo2, hi2 = 0, 150
@@ -77,10 +79,10 @@ def crawl(pair):
                 mid = (lo2 + hi2 + 1) // 2
                 if ok2(mid): lo2 = mid
                 else: hi2 = mid - 1
-            s = dep(a, b, nxt, lo2)
+            s = dep(a, q, nxt, lo2)
             res['last'] = '%02d:%02d:%02d' % (24 + s // 3600, s % 3600 // 60, s % 60)
             return pair, res
-        s = dep(a, b, day, hi)
+        s = dep(a, q, day, hi)
         res['last'] = '%02d:%02d:%02d' % (s // 3600, s % 3600 // 60, s % 60)
         return pair, res
     if not ok(lo):
@@ -92,14 +94,26 @@ def crawl(pair):
         mid = (lo + hi + 1) // 2
         if ok(mid): lo = mid
         else: hi = mid - 1
-    s = dep(a, b, day, lo)
+    s = dep(a, q, day, lo)
     res['last'] = '%02d:%02d:%02d' % (s // 3600, s % 3600 // 60, s % 60)
     return pair, res
 
 pairs = []
+from collections import defaultdict
+lines_on = defaultdict(set)   # undirected edge -> lines
+nbrs = defaultdict(set)       # (station, line) -> neighbours
 for e in net['edges']:
-    pairs.append((e['a'], e['b'], e['line']))
-    pairs.append((e['b'], e['a'], e['line']))
+    lines_on[frozenset((e['a'], e['b']))].add(e['line'])
+    nbrs[(e['a'], e['line'])].add(e['b']); nbrs[(e['b'], e['line'])].add(e['a'])
+for e in net['edges']:
+    for a, b in ((e['a'], e['b']), (e['b'], e['a'])):
+        if e.get('oneway') and (a, b) != (e['a'], e['b']):
+            continue
+        q = b
+        if len(lines_on[frozenset((a, b))]) > 1:
+            beyond = sorted(nbrs[(b, e['line'])] - {a})
+            if beyond: q = beyond[0]
+        pairs.append((a, b, e['line'], q))
 out = {'generated': datetime.datetime.now().isoformat(timespec='seconds'), 'day': day, 'edge': {}, 'dir': {}}
 done = 0
 with ThreadPoolExecutor(max_workers=5) as ex:
@@ -108,11 +122,11 @@ with ThreadPoolExecutor(max_workers=5) as ex:
         if done % 50 == 0:
             print('progress', done, '/', len(pairs), flush=True)
             with lock: json.dump(cache, open(cache_p, 'w'))
-        a, b, line = pair
+        a, b, line, q = pair
         if not res:
             print('FAIL', pair, flush=True); continue
-        out['dir'][f'{a}|{b}'] = res
-        if res.get('edge_s') and res.get('nstations') == 2:
+        out['dir'][f'{a}|{b}|{line}'] = res
+        if q == b and res.get('edge_s') and res.get('nstations') == 2:
             out['edge'][f'{a}|{b}'] = res['edge_s']
 json.dump(cache, open(cache_p, 'w'))
 json.dump(out, open(os.path.join(raw, 'timings.json'), 'w'), indent=0)

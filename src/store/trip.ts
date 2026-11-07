@@ -23,6 +23,11 @@ export type Trip = {
   activityDismissed: boolean;
   /** When the trip was detected as arrived (epoch ms). */
   arrivedAt: number | null;
+  /**
+   * How the trip can be followed while the phone is locked: 'background' = background location
+   * keeps the app running; otherwise iOS suspends it and the Live Activity shows milestones only.
+   */
+  tracking: 'background' | 'foreground' | 'none';
 };
 
 type TripState = {
@@ -61,7 +66,8 @@ export const useTrip = create<TripState>()(
       merge: (persisted, current) => {
         const trip = (persisted as { trip?: unknown } | undefined)?.trip;
         // a trip started before hydration finished wins over the stored one
-        return { ...current, trip: current.trip ?? (isValidTrip(trip) ? trip : null) };
+        const restored = isValidTrip(trip) ? { ...trip, tracking: trip.tracking ?? 'none' } : null;
+        return { ...current, trip: current.trip ?? restored };
       },
       onRehydrateStorage: () => () => useTrip.setState({ hydrated: true }),
     },

@@ -29,6 +29,7 @@ export type TripActivityProps = {
   progress: number; // 0..1
   action: string; // "Change at Rajiv Chowk for Blue Line" / "Get off at Patel Chowk"
   phase: 'waiting' | 'riding' | 'transfer' | 'arriving' | 'arrived';
+  title: string; // headline, composed by the app
   etaText: string; // arrival clock (IST), formatted by the app
   departText: string; // first departure clock (IST)
 };
@@ -43,15 +44,8 @@ const TripActivity = (p: TripActivityProps, env: LiveActivityEnvironment) => {
   const startDate = new Date(Math.min(p.start, now));
   const arrived = p.phase === 'arrived';
   const etaClock = p.etaText;
-  const waiting = p.phase === 'waiting';
   const stopsLabel = p.stopsLeft === 1 ? '1 stop' : p.stopsLeft + ' stops';
-  const headline = arrived
-    ? 'Arrived at ' + p.dest
-    : waiting
-      ? 'Train at ' + p.departText
-      : p.phase === 'arriving'
-        ? 'Next: ' + p.next + ' — get off'
-        : 'Next: ' + p.next;
+  const headline = p.title;
 
   const chip = (
     <Text

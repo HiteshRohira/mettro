@@ -1,4 +1,4 @@
-import { DIR_TIMINGS, EDGES, getLine, getStation, lineById, titleTowards } from '@/lib/network';
+import { dirTiming, EDGES, getLine, getStation, lineById, titleTowards } from '@/lib/network';
 import { estimateFare } from '@/lib/fare';
 
 export type Leg = {
@@ -41,16 +41,25 @@ for (const e of EDGES) {
   if (!e.oneway) (adj.get(e.b) ?? adj.set(e.b, []).get(e.b)!).push({ to: e.a, line: e.line, s, km: e.km });
 }
 
-/**
- * Lines DMRC's planner treats as one continuous ride (no change needed):
- * Blue main line + Vaishali branch, and the Pink/Magenta extensions.
- */
-const colourGroup = (lineId: string) => {
-  if (lineId === 'LN4') return 'LN3';
-  if (lineId === 'LN7EXTN') return 'LN7';
-  if (lineId === 'LN8EXTN') return 'LN8';
-  return lineById.get(lineId)!.id;
-};
+// Blue Line: trains run Dwarka ⇄ Noida and Dwarka ⇄ Vaishali through Yamuna Bank, so the
+// west section continues onto either branch, but Noida ⇄ Vaishali needs a change at Yamuna Bank.
+const LN3_SEQ = lineById.get('LN3')?.stations ?? [];
+const YB_IDX = LN3_SEQ.indexOf('YB'); // LN3 runs Noida (index 0) → Dwarka
+
+/** Ride group of a hop: hops in groups that run through each other need no change. */
+function hopGroup(line: string, a: string, b: string) {
+  if (line === 'LN3' && YB_IDX >= 0) return Math.max(LN3_SEQ.indexOf(a), LN3_SEQ.indexOf(b)) <= YB_IDX ? 'LN3E' : 'LN3W';
+  if (line === 'LN7EXTN') return 'LN7';
+  if (line === 'LN8EXTN') return 'LN8';
+  return line;
+}
+
+/** Does going from a hop in group g1 to a hop in group g2 require changing trains? */
+function isTransfer(g1: string, g2: string) {
+  if (g1 === g2) return false;
+  const pair = [g1, g2].sort().join('+');
+  return pair !== 'LN3E+LN3W' && pair !== 'LN3W+LN4';
+}
 
 class Heap<T> {
   private a: { k: number; v: T }[] = [];
@@ -92,7 +101,7 @@ class Heap<T> {
 
 /** Direction terminal on a line when travelling a -> b */
 export function towardsFor(lineId: string, a: string, b: string): string {
-  const t = DIR_TIMINGS[`${a}|${b}`];
+  const t = dirTiming(a, b, lineId);
   if (t?.to) return titleTowards(t.to);
   const l = getLine(lineId);
   const seqs = [l.stations, ...l.branches];
@@ -110,14 +119,15 @@ export function towardsFor(lineId: string, a: string, b: string): string {
 export function planOffline(from: string, to: string, mode: Journey['mode'] = 'fastest'): Journey | null {
   if (from === to) return null;
   const penalty = mode === 'fewest-changes' ? 40 * 60 : INTERCHANGE_S;
-  // state key: station|lineGroup
+  // state key: station|rideGroup|previousStation (the previous station forbids U-turns, which
+  // could otherwise dodge a required change, e.g. Yamuna Bank → Indraprastha → Yamuna Bank)
   const dist = new Map<string, number>();
   const prev = new Map<string, { key: string; line: string; s: number } | null>();
-  const h = new Heap<{ st: string; line: string | null; key: string }>();
-  const startKey = `${from}|*`;
+  const h = new Heap<{ st: string; line: string | null; key: string; from: string | null }>();
+  const startKey = `${from}|*|`;
   dist.set(startKey, 0);
   prev.set(startKey, null);
-  h.push(0, { st: from, line: null, key: startKey });
+  h.push(0, { st: from, line: null, key: startKey, from: null });
   let goal: string | null = null;
   while (h.size) {
     const { k, v } = h.pop()!;
@@ -127,14 +137,15 @@ export function planOffline(from: string, to: string, mode: Journey['mode'] = 'f
       break;
     }
     for (const arc of adj.get(v.st) ?? []) {
-      const g = colourGroup(arc.line);
-      const switching = v.line !== null && v.line !== g;
+      if (arc.to === v.from) continue;
+      const g = hopGroup(arc.line, v.st, arc.to);
+      const switching = v.line !== null && isTransfer(v.line, g);
       const cost = k + arc.s + (switching ? penalty : 0);
-      const key = `${arc.to}|${g}`;
+      const key = `${arc.to}|${g}|${v.st}`;
       if (cost < (dist.get(key) ?? Infinity)) {
         dist.set(key, cost);
         prev.set(key, { key: v.key, line: arc.line, s: arc.s });
-        h.push(cost, { st: arc.to, line: g, key });
+        h.push(cost, { st: arc.to, line: g, key, from: v.st });
       }
     }
   }
@@ -153,9 +164,12 @@ export function planOffline(from: string, to: string, mode: Journey['mode'] = 'f
 
 function journeyFromHops(from: string, to: string, hops: { a: string; b: string; line: string; s: number }[], mode: Journey['mode']): Journey {
   const legs: Leg[] = [];
+  let lastGroup: string | null = null;
   for (const hop of hops) {
     const last = legs[legs.length - 1];
-    const sameRun = last && colourGroup(last.lineId) === colourGroup(hop.line);
+    const g = hopGroup(hop.line, hop.a, hop.b);
+    const sameRun = last && lastGroup !== null && !isTransfer(lastGroup, g);
+    lastGroup = g;
     if (sameRun) {
       last.stations.push(hop.b);
       last.segS.push(hop.s);
@@ -167,7 +181,7 @@ function journeyFromHops(from: string, to: string, hops: { a: string; b: string;
         lineId: hop.line,
         stations: [hop.a, hop.b],
         towards: towardsFor(hop.line, hop.a, hop.b),
-        platform: DIR_TIMINGS[`${hop.a}|${hop.b}`]?.platform ?? null,
+        platform: dirTiming(hop.a, hop.b, hop.line)?.platform ?? null,
         durationS: hop.s,
         segS: [hop.s],
       });

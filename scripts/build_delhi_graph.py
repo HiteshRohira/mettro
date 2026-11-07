@@ -276,10 +276,19 @@ for l in lines:
         edges.append(e)
 
 # first/last per station per direction
+# first/last per directed edge AND line ("A|B|LINE"): track shared by two lines has two timetables
+line_num = {l['id']: l['num'] for l in lines}
 fl = {}
 for k, v in timings.get('dir', {}).items():
-    if v.get('nstations') != 2: continue
-    fl[k] = {'line': v['line'], 'to': v.get('to'), 'platform': v.get('platform'), 'first': v.get('first'), 'last': v.get('last')}
+    parts = k.split('|')
+    if len(parts) != 3: continue  # old crawl format
+    a, b, lid = parts
+    expected = 3 if v.get('via') else 2
+    if v.get('nstations') != expected: continue
+    if v.get('via') and v.get('line_no') not in (None, line_num.get(lid)):
+        print(f'WARN {k}: planner answered with line_no {v.get("line_no")}, skipping')
+        continue
+    fl[k] = {'line': lid, 'to': v.get('to'), 'platform': v.get('platform'), 'first': v.get('first'), 'last': v.get('last')}
 
 # ---- validation: fail the build on data that would mislead riders ----
 problems = []

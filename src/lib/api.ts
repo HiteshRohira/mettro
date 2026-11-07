@@ -116,7 +116,6 @@ export async function planOnline(from: string, to: string, when: Date, mode: Api
     if (codes.length < 2) continue;
     const line = lineFor(seg.line_no, codes[0], codes[1]);
     if (!line) throw new Error(`Unknown line ${seg.line}`);
-    const total = hms(seg.path_time);
     const hopKm: number[] = [];
     const hopS: number[] = [];
     for (let i = 0; i < codes.length - 1; i++) {
@@ -124,6 +123,11 @@ export async function planOnline(from: string, to: string, when: Date, mode: Api
       hopKm.push(e?.km ?? 1.2);
       hopS.push(e?.s ?? 120);
     }
+    // The planner sometimes returns impossible leg times (seen: 2 s for Burari → Majlis Park).
+    // Outside half to triple the network's own hop times, use those instead.
+    const graphS = hopS.reduce((a, b) => a + b, 0);
+    const plannerS = hms(seg.path_time);
+    const total = plannerS >= graphS * 0.5 && plannerS <= graphS * 3 ? plannerS : graphS;
     km += hopKm.reduce((a, b) => a + b, 0);
     if (legs.length) interchangeS += (Number(seg.station_interchange_time) || 5) * 60;
     // scale per-hop seconds to match the planner's leg time

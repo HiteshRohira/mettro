@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, LineChip, Pill, Press, SectionHeader, T } from '@/components/ui';
 import { hm } from '@/lib/format';
-import { DIR_TIMINGS, getStation, lineById, lineLabel, linesOf, onLineColor } from '@/lib/network';
+import { dirTiming, getStation, lineById, lineLabel, linesOf, onLineColor } from '@/lib/network';
 import { isNormal, useStatus } from '@/store/status';
 import { radius, useTheme } from '@/theme';
 
@@ -19,8 +19,8 @@ export default function LineScreen() {
   const seq = line.stations;
   const first = seq[0];
   const last = seq[seq.length - 1];
-  const fwd = DIR_TIMINGS[`${first}|${seq[1]}`];
-  const bwd = DIR_TIMINGS[`${last}|${seq[seq.length - 2]}`];
+  const fwd = dirTiming(first, seq[1], line.id);
+  const bwd = dirTiming(last, seq[seq.length - 2], line.id);
   const count = new Set([...seq, ...line.branches.flat()]).size;
   const ok = isNormal(status);
 

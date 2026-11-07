@@ -165,39 +165,94 @@ export function computeProgress(trip: Trip, now = Date.now()): Progress {
   };
 }
 
-function activityProps(trip: Trip, p: Progress): TripActivityProps {
-  const leg = trip.journey.legs[Math.min(p.legIndex, trip.journey.legs.length - 1)];
+/** Next point where the rider must act (a change or the destination) after the current position. */
+function nextMilestone(p: Progress) {
+  const last = p.pts.length - 1;
+  for (let i = p.idx + 1; i <= last; i++) if (p.pts[i].transfer || i === last) return { pt: p.pts[i], i };
+  return { pt: p.pts[last], i: last };
+}
+
+/**
+ * When iOS will suspend the app (no background location), the Live Activity can't be updated
+ * stop by stop, so it shows content that stays true until the next milestone instead.
+ */
+function milestoneMode(trip: Trip) {
+  return trip.tracking !== 'background';
+}
+
+export function activityProps(trip: Trip, p: Progress): TripActivityProps {
+  const j = trip.journey;
+  const leg = j.legs[Math.min(p.legIndex, j.legs.length - 1)];
   const line = getLine(leg.lineId);
   const waiting = p.phase === 'waiting';
-  return {
+  const base = {
     lineColor: line.color,
     lineText: onLineColor(line.color),
     lineName: lineLabel(line),
     towards: leg.towards,
     current: getStation(p.current.code).name,
-    next: waiting ? getStation(p.current.code).name : p.next ? getStation(p.next.code).name : getStation(trip.journey.to).name,
-    nextAt: Math.round(waiting ? p.departAt : p.nextAt),
-    dest: getStation(trip.journey.to).name,
+    dest: getStation(j.to).name,
     eta: Math.round(p.eta),
     etaText: istClock(p.eta),
     departText: istClock(p.departAt),
     start: Math.round(p.departAt),
     stopsLeft: p.stopsLeft,
     progress: p.progress,
-    action: p.action,
     phase: p.phase,
   };
+  if (p.phase === 'arrived') return { ...base, title: `Arrived at ${base.dest}`, next: base.dest, nextAt: Math.round(p.eta), action: p.action };
+  if (waiting) return { ...base, title: `Train at ${base.departText}`, next: base.current, nextAt: Math.round(p.departAt), action: p.action };
+  if (milestoneMode(trip)) {
+    const m = nextMilestone(p);
+    const at = m.pt.at + trip.delayMs;
+    const name = getStation(m.pt.code).name;
+    if (m.pt.transfer) {
+      const nl = j.legs[m.pt.legIndex + 1];
+      return {
+        ...base,
+        phase: 'transfer',
+        title: `Change at ${name} · ${istClock(at)}`,
+        next: name,
+        nextAt: Math.round(at),
+        action: `${lineLabel(getLine(nl.lineId))} → ${nl.towards}${nl.platform ? ' · ' + nl.platform.replace('Platform No.', 'P') : ''}`,
+      };
+    }
+    return {
+      ...base,
+      phase: 'arriving',
+      title: `Get off at ${name} · ${istClock(at)}`,
+      next: name,
+      nextAt: Math.round(at),
+      action: `${m.i - p.idx} stop${m.i - p.idx === 1 ? '' : 's'} · towards ${leg.towards}`,
+    };
+  }
+  const nextName = p.next ? getStation(p.next.code).name : base.dest;
+  return {
+    ...base,
+    title: p.phase === 'arriving' ? `Next: ${nextName} — get off` : `Next: ${nextName}`,
+    next: nextName,
+    nextAt: Math.round(p.nextAt),
+    action: p.action,
+  };
+}
+
+/** iOS dims the activity after this if no newer content arrived. */
+function staleDate(trip: Trip, p: Progress) {
+  if (milestoneMode(trip) && p.phase !== 'waiting') return new Date(nextMilestone(p).pt.at + trip.delayMs + 2 * 60e3);
+  return new Date(p.eta + 15 * 60e3);
 }
 
 // ---------- Live Activity ----------
 let lastPushed = '';
+let createdAt = 0;
+let missing = 0;
 
-function activityById(id: string | null) {
+function activityLookup(id: string | null) {
   if (Platform.OS !== 'ios' || !id) return null;
   try {
     return TripActivity.getInstances().find((a) => a.getId() === id) ?? null;
   } catch {
-    return null;
+    return 'error' as const;
   }
 }
 
@@ -213,12 +268,20 @@ async function syncActivity(trip: Trip, p: Progress) {
   }
   const props = activityProps(trip, p);
   try {
-    const inst = activityById(trip.activityId);
+    const lookup = activityLookup(trip.activityId);
+    if (lookup === 'error') return; // couldn't ask ActivityKit; try again next tick
+    const inst = lookup;
     if (trip.activityId && !inst) {
-      // the user swiped it away (or iOS ended it) — respect that for this trip
-      if (!trip.activityDismissed) useTrip.getState().patch({ activityDismissed: true, activityId: null });
+      // Gone from ActivityKit: the user swiped it away (or iOS ended it). Require a few consecutive
+      // misses well after creation so a lookup right after start() isn't mistaken for a dismissal.
+      missing += 1;
+      if (missing >= 3 && Date.now() - createdAt > 15e3) {
+        useTrip.getState().patch({ activityDismissed: true, activityId: null });
+        missing = 0;
+      }
       return;
     }
+    missing = 0;
     if (inst) {
       if (p.phase === 'arrived') {
         await inst.end(after(new Date(Date.now() + 5 * 60e3)), props, new Date());
@@ -228,11 +291,13 @@ async function syncActivity(trip: Trip, p: Progress) {
       }
       const key = JSON.stringify({ ...props, progress: Math.round(props.progress * 50) });
       if (key === lastPushed) return; // nothing visible changed
-      await inst.update(props, new Date(p.eta + 15 * 60e3));
+      await inst.update(props, staleDate(trip, p));
       lastPushed = key;
     } else if (!trip.activityDismissed && p.phase !== 'arrived') {
-      const created = TripActivity.start(props, 'mettro://trip', new Date(p.eta + 15 * 60e3));
+      const created = TripActivity.start(props, 'mettro://trip', staleDate(trip, p));
       useTrip.getState().patch({ activityId: created.getId() });
+      createdAt = Date.now();
+      missing = 0;
       lastPushed = '';
     }
   } catch (e) {
@@ -331,8 +396,10 @@ export async function onFix(fix: Fix) {
       let delay = trip.delayMs;
       if (bestKm < AT_STATION_KM) {
         if (best > trip.anchorIdx) {
-          // first fix at a newly reached station: we arrived around now
-          delay = fix.at - pt.at;
+          // First fix at a newly reached station: we arrived no later than now and leave no earlier
+          // than now, so the delay lies in [now − dep, now − arr]. Keep the current estimate if it
+          // fits (e.g. mid-way through a planned interchange walk), otherwise move to the nearest bound.
+          delay = Math.min(fix.at - pt.at, Math.max(fix.at - pt.dep, delay));
         } else {
           // still at the same station (origin wait, dwell, interchange walk): we can only be later
           // than its scheduled departure, never earlier
@@ -392,9 +459,11 @@ export async function startTrip(j: Journey, startAt?: number) {
     activityId: null,
     activityDismissed: false,
     arrivedAt: null,
+    tracking: 'none',
   };
   useTrip.getState().setTrip(trip);
   const loc = await startLocation(true);
+  useTrip.getState().patch({ tracking: loc === 'background' ? 'background' : loc === 'foreground' ? 'foreground' : 'none' });
   ensureController();
   await tick();
   return loc;
@@ -444,9 +513,15 @@ function ensureController() {
 export async function resumeTracking() {
   await whenHydrated();
   const trip = useTrip.getState().trip;
-  if (!trip) return;
+  if (!trip) {
+    // e.g. a stored trip was rejected on restore: don't leave native tracking or a Live Activity behind
+    await stopLocation();
+    await endAllActivities();
+    return;
+  }
   ensureController();
-  await startLocation(false);
+  const mode = await startLocation(false);
+  useTrip.getState().patch({ tracking: mode === 'background' ? 'background' : mode === 'foreground' ? 'foreground' : 'none' });
 }
 
 // Turning Live Activities off mid-trip removes the one on screen right away.

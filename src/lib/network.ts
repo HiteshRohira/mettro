@@ -206,10 +206,15 @@ export function linesBetween(a: string, b: string) {
 }
 
 /** All direction timings for a station: one per neighbour. */
+/** First/last train etc. for trains on `line` leaving `a` towards neighbour `b`. */
+export function dirTiming(a: string, b: string, line: string): DirTiming | undefined {
+  return DIR_TIMINGS[`${a}|${b}|${line}`];
+}
+
 export function directionsAt(code: string) {
   return neighboursOf(code)
-    .map((n) => ({ neighbour: n.code, line: n.line, timing: DIR_TIMINGS[`${code}|${n.code}`] }))
-    .filter((d) => d.timing);
+    .map((n) => ({ neighbour: n.code, line: n.line, timing: dirTiming(code, n.code, n.line) }))
+    .filter((d): d is { neighbour: string; line: string; timing: DirTiming } => !!d.timing);
 }
 
 export function titleTowards(name: string | null | undefined) {
