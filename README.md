@@ -4,6 +4,29 @@ A fast, modern metro companion for iOS. It starts with **Delhi Metro** (DMRC, Ra
 
 Built with Expo SDK 58, React Native 0.88 and Expo Router. Text is set in Inter.
 
+## Screenshots
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/9fed65b0-5520-4bf7-8543-6b0e51eb729a" alt="Delhi Metro journey planner in dark mode" width="280">
+  <img src="https://github.com/user-attachments/assets/3d8b8500-fc5f-4080-9ffb-f7f3f94a3530" alt="Route to AIIMS with train times, platform, fare and last train warning in dark mode" width="280">
+</p>
+
+[Watch the UI walkthrough](https://github.com/user-attachments/assets/880ba636-0ea6-423f-b431-e5e96da132d8) · [Full-resolution screenshots](https://github.com/HiteshRohira/mettro/pull/2#issuecomment-6710805250)
+
+<details>
+<summary>Explore the UI in dark and light mode</summary>
+
+| Screen | Dark | Light |
+|---|---|---|
+| Journey planner | <img src="https://github.com/user-attachments/assets/9fed65b0-5520-4bf7-8543-6b0e51eb729a" alt="Journey planner in dark mode" width="240"> | <img src="https://github.com/user-attachments/assets/41b6a115-860c-48ad-a416-e1a9e7624e03" alt="Journey planner in light mode" width="240"> |
+| Route & fare | <img src="https://github.com/user-attachments/assets/3d8b8500-fc5f-4080-9ffb-f7f3f94a3530" alt="Route & fare in dark mode" width="240"> | <img src="https://github.com/user-attachments/assets/06a61b73-2cb8-422e-8a72-91def9a87d47" alt="Route & fare in light mode" width="240"> |
+| Active trip | <img src="https://github.com/user-attachments/assets/30e151d4-07e4-4d94-9cc1-3fe18cc4dde5" alt="Active trip in dark mode" width="240"> | <img src="https://github.com/user-attachments/assets/6c73d817-b88d-4d45-a1d4-fa03ce91ad31" alt="Active trip in light mode" width="240"> |
+| Station & train timings | <img src="https://github.com/user-attachments/assets/ed76acc8-74a3-42cb-ab2e-d0e65b9c09f7" alt="Station & train timings in dark mode" width="240"> | <img src="https://github.com/user-attachments/assets/13c70635-2f49-45f3-ba98-ec555c98e11b" alt="Station & train timings in light mode" width="240"> |
+| Network map | <img src="https://github.com/user-attachments/assets/83bd4a50-f979-4f30-a3aa-8852a9563f8a" alt="Network map in dark mode" width="240"> | <img src="https://github.com/user-attachments/assets/6c44ce65-9f61-4724-9632-c6c3d0998d9a" alt="Network map in light mode" width="240"> |
+| Preferences & travel info | <img src="https://github.com/user-attachments/assets/b5681c9d-d996-4d12-ac0e-9eeaaa89d39f" alt="Preferences & travel info in dark mode" width="240"> | <img src="https://github.com/user-attachments/assets/6a57f585-a00e-490b-8472-7fa152c98724" alt="Preferences & travel info in light mode" width="240"> |
+
+</details>
+
 ## Features
 
 - **Journey planner**: live routes, train times, platforms and fares from the official DMRC journey planner, with *fastest* and *fewest changes* options. If DMRC is unreachable, an offline planner takes over.
