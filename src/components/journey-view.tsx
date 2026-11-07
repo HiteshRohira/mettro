@@ -81,9 +81,9 @@ function LegBlock({ leg, first, last }: { leg: Leg; first: boolean; last: boolea
               </T>
             ) : null}
           </View>
-          <T v="bodyStrong">Towards {leg.towards}</T>
+          <T v="body">Towards {leg.towards}</T>
           <Press onPress={() => setOpen((v) => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} hitSlop={6}>
-            <T v="caption" dim>
+            <T v="caption" faint>
               {stops} stop{stops === 1 ? '' : 's'} · {fmtDuration(leg.durationS)}
             </T>
             {mids.length ? <Icon name={open ? 'chevron.up' : 'chevron.down'} size={10} color={c.text3} /> : null}
@@ -100,7 +100,7 @@ function LegBlock({ leg, first, last }: { leg: Leg; first: boolean; last: boolea
             : null}
         </View>
       </View>
-      {last ? <StationNode code={leg.stations[leg.stations.length - 1]} color={line.color} big time={leg.arrive} sub="Destination" /> : null}
+      {last ? <StationNode code={leg.stations[leg.stations.length - 1]} color={line.color} big time={leg.arrive} /> : null}
     </View>
   );
 }
@@ -134,8 +134,8 @@ function TransferBlock({ from, to }: { from: Leg; to: Leg }) {
           }}>
           <Icon name="figure.walk" size={15} color={c.text2} />
           <T v="caption" dim style={{ flex: 1 }}>
-            Change to {lineLabel(b)} at {getStation(code).name}
-            {to.depart && from.arrive ? ` · next train ${hm(to.depart)}` : ' · allow ~5 min'}
+            Change to {lineLabel(b)}
+            {to.depart && from.arrive ? ` · ${hm(to.depart)}` : ''}
           </T>
         </View>
       </View>

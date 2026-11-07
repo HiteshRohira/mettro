@@ -68,6 +68,7 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const [sel, setSel] = useState<Station | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [showFilter, setShowFilter] = useState(false);
   const { list: nearby, coords } = useNearest(1, false);
   const nearest = nearby[0] && nearby[0].km < 40 ? nearby[0] : null;
   const legend = useMemo(
@@ -110,6 +111,7 @@ export default function MapScreen() {
         <Stations onSelect={select} hidden={hidden} />
       </MapView>
 
+      {showFilter ? (
       <View style={{ position: 'absolute', top: insets.top + 6, left: 0, right: 0, paddingHorizontal: 12 }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 2 }}>
           {legend.map((l) => {
@@ -141,8 +143,9 @@ export default function MapScreen() {
           })}
         </ScrollView>
       </View>
+      ) : null}
 
-      <View style={{ position: 'absolute', right: 12, bottom: insets.bottom + 100 + (sel ? 150 : nearest ? 80 : 0), gap: 8 }}>
+      <View style={{ position: 'absolute', right: 12, bottom: insets.bottom + 100 + (sel ? 120 : nearest ? 64 : 0), gap: 8 }}>
         <Press
           onPress={async () => {
             const p = await locate(true);
@@ -161,7 +164,8 @@ export default function MapScreen() {
           <Icon name="location.fill" size={17} color={c.accent} />
         </Press>
         <Press
-          onPress={() => mapRef.current?.animateToRegion(DELHI, 300)}
+          onPress={() => setShowFilter((v) => !v)}
+          accessibilityLabel="Filter lines"
           style={{
             width: 44,
             height: 44,
@@ -172,33 +176,37 @@ export default function MapScreen() {
             borderWidth: 0.5,
             borderColor: c.border,
           }}>
-          <Icon name="arrow.up.left.and.arrow.down.right" size={16} color={c.text} />
+          <Icon
+            name={hidden.size ? 'line.3.horizontal.decrease.circle.fill' : 'line.3.horizontal.decrease'}
+            size={17}
+            color={hidden.size || showFilter ? c.accent : c.text}
+          />
         </Press>
       </View>
 
       <View style={{ position: 'absolute', left: 12, right: 12, bottom: insets.bottom + 90 }}>
         {sel ? (
-          <Card style={{ gap: 10 }}>
+          <Card style={{ gap: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <LineDots colors={stationColors(sel)} />
-              <T v="h3" style={{ flex: 1 }} numberOfLines={1}>
-                {sel.name}
-              </T>
-              <Press onPress={() => setSel(null)} hitSlop={10}>
+              <Press
+                onPress={() => router.push({ pathname: '/station/[code]', params: { code: sel.code } })}
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <LineDots colors={stationColors(sel)} size={8} />
+                <T v="h3" numberOfLines={1} style={{ flexShrink: 1 }}>
+                  {sel.name}
+                </T>
+                <Icon name="chevron.right" size={11} color={c.text3} />
+              </Press>
+              {selKm ? (
+                <T v="label" faint>
+                  {selKm}
+                </T>
+              ) : null}
+              <Press onPress={() => setSel(null)} hitSlop={10} accessibilityLabel="Close">
                 <Icon name="xmark.circle.fill" size={20} color={c.text3} />
               </Press>
             </View>
-            <T v="caption" dim>
-              {sel.type}
-              {sel.interchange ? ' · Interchange' : ''}
-              {selKm ? ` · ${selKm} from you` : ''}
-            </T>
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Press
-                onPress={() => router.push({ pathname: '/station/[code]', params: { code: sel.code } })}
-                style={{ flex: 1, height: 40, borderRadius: radius.md, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
-                <T v="label">Details</T>
-              </Press>
               <Press
                 onPress={() => {
                   usePlanner.getState().set({ from: sel.code, fromIsLocation: false });
@@ -224,17 +232,12 @@ export default function MapScreen() {
         ) : nearest ? (
           <Press onPress={() => select(nearest.station)}>
             <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Icon name="figure.walk" size={18} color={c.accent} />
-              <View style={{ flex: 1 }}>
-                <T v="micro" faint>
-                  Nearest station
-                </T>
-                <T v="bodyStrong" numberOfLines={1}>
-                  {nearest.station.name}
-                </T>
-              </View>
-              <T v="label" dim>
-                {walkMin(nearest.km)} min · {fmtKm(nearest.km)}
+              <Icon name="figure.walk" size={16} color={c.text2} />
+              <T v="body" numberOfLines={1} style={{ flex: 1 }}>
+                {nearest.station.name}
+              </T>
+              <T v="label" faint>
+                {walkMin(nearest.km)} min walk
               </T>
             </Card>
           </Press>

@@ -1,13 +1,13 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActionSheetIOS, Linking, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Divider, Icon, LineChip, Pill, Press, Row, SectionHeader, T } from '@/components/ui';
+import { Button, Card, Disclosure, Divider, Icon, LineChip, Press, SectionHeader, T } from '@/components/ui';
 import { fetchStationLive, type StationLive } from '@/lib/api';
 import { getDetails } from '@/lib/details';
 import { hm } from '@/lib/format';
-import { directionsAt, getLine, getStation, lineLabel, linesOf, stationByCode, titleTowards } from '@/lib/network';
+import { directionsAt, getLine, lineLabel, linesOf, stationByCode, titleTowards } from '@/lib/network';
 import { usePlanner } from '@/store/planner';
 import { useSettings } from '@/store/settings';
 import { isNormal, useStatus } from '@/store/status';
@@ -36,11 +36,9 @@ export default function StationScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const s = stationByCode.get(code);
   const d = useMemo(() => getDetails(code), [code]);
-  const { favourites, home, work } = useSettings();
+  const favourites = useSettings((st) => st.favourites);
   const lineStatus = useStatus((st) => st.lines);
   const [live, setLive] = useState<StationLive | null>(null);
-  const [showAllGates, setShowAllGates] = useState(false);
-  const [showLifts, setShowLifts] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -61,6 +59,103 @@ export default function StationScreen() {
   const alerts = live?.status?.length ? live.status : (d?.status ?? []);
   const lifts = d?.lifts.filter((l) => l.type === 'Lift') ?? [];
   const escalators = d?.lifts.filter((l) => l.type !== 'Lift') ?? [];
+  const brokenLifts = d?.lifts.filter((l) => !l.ok) ?? [];
+  const call = (n: string) => Linking.openURL(`tel:${n}`);
+
+  type Section = { title: string; detail?: string; tone?: 'danger'; body: React.ReactNode };
+  const sections: Section[] = [];
+  if (d?.platforms?.length)
+    sections.push({
+      title: 'Platforms',
+      detail: String(d.platforms.length),
+      body: d.platforms.map((p) => (
+        <Item
+          key={p.name}
+          title={p.name.replace(/\s*\(.*\)/, '')}
+          sub={`Towards ${[p.to, p.to2]
+            .filter(Boolean)
+            .map((x) => stationByCode.get(x!)?.name ?? x)
+            .join(' / ')}${/\(Airport Express\)/.test(p.name) ? ' (Airport Express)' : ''}`}
+        />
+      )),
+    });
+  if (gates.length)
+    sections.push({
+      title: 'Gates',
+      detail: closedGates.length ? `${closedGates.length} closed` : String(gates.length),
+      tone: closedGates.length ? 'danger' : undefined,
+      body: gates.map((g, i) => <Item key={g.name + i} title={`${g.name}${g.open ? '' : ' · Closed'}`} sub={g.loc} bad={!g.open} />),
+    });
+  if (d?.lifts?.length)
+    sections.push({
+      title: 'Lifts & escalators',
+      detail: brokenLifts.length ? `${brokenLifts.length} not working` : `${lifts.length} · ${escalators.length}`,
+      tone: brokenLifts.length ? 'danger' : undefined,
+      body: d.lifts.map((l, i) => (
+        <Item
+          key={l.name + i}
+          icon={l.type === 'Lift' ? 'arrow.up.arrow.down.square' : 'stairs'}
+          bad={!l.ok}
+          title={`${l.name}${l.ok ? '' : ' · Not working'}`}
+          sub={[l.loc, l.side?.toLowerCase()].filter(Boolean).join(' · ')}
+        />
+      )),
+    });
+  if (d?.facilities?.length)
+    sections.push({
+      title: 'Facilities',
+      detail: String(d.facilities.length),
+      body: d.facilities.map((f) => (
+        <Item
+          key={f.kind}
+          icon={FAC_ICON[f.kind] ?? 'info.circle'}
+          title={f.kind}
+          sub={f.items.map((it) => [it.name !== f.kind ? it.name : '', it.loc].filter(Boolean).join(': ')).filter(Boolean).join('\n')}
+        />
+      )),
+    });
+  if (d?.parking?.length)
+    sections.push({
+      title: 'Parking',
+      body: d.parking.map((p, i) => (
+        <Item
+          key={i}
+          title={p.by || 'Parking'}
+          sub={[p.loc, [p.car ? `${p.car} cars` : '', p.bike ? `${p.bike} two-wheelers` : '', p.cycle ? `${p.cycle} cycles` : ''].filter(Boolean).join(' · ')]
+            .filter(Boolean)
+            .join('\n')}
+        />
+      )),
+    });
+  if (d?.feeder?.length)
+    sections.push({
+      title: 'Feeder buses',
+      detail: String(d.feeder.length),
+      body: d.feeder.map((f, i) => (
+        <Item
+          key={i}
+          title={`${f.route_num ?? 'Route'} · ${f.destination ?? ''}`}
+          sub={[f.area_covered, f.service_frequency ? `Every ${f.service_frequency}` : '', f.fare].filter(Boolean).join('\n')}
+        />
+      )),
+    });
+  if (d?.nearby?.length) sections.push({ title: 'Nearby places', body: <Nearby items={d.nearby} /> });
+  if (d?.mobile || d?.landline)
+    sections.push({
+      title: 'Contact',
+      body: [d.mobile, d.landline]
+        .filter(Boolean)
+        .map((n) => <Item key={n} icon="phone" title={n!} onPress={() => call(n!)} />),
+    });
+  if (d?.desc)
+    sections.push({
+      title: 'About',
+      body: (
+        <T v="body" dim>
+          {d.desc}
+        </T>
+      ),
+    });
 
   const more = () => {
     const opts = ['Set as Home', 'Set as Work', 'Open in Maps', 'Cancel'];
@@ -89,30 +184,21 @@ export default function StationScreen() {
         }}
       />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 40 }}>
-        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+        <T v="display" style={{ marginTop: 4 }}>
+          {s.name}
+        </T>
+        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
           {lines.map((l) => (
             <Press key={l.id} onPress={() => router.push({ pathname: '/line/[id]', params: { id: l.id } })}>
               <LineChip line={l} label={lineLabel(l)} />
             </Press>
           ))}
         </View>
-        <T v="display" style={{ marginTop: 10 }}>
-          {s.name}
-        </T>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-          {s.type ? <Pill text={s.type} icon={s.type === 'Underground' ? 'arrow.down.to.line' : 'arrow.up.to.line'} /> : null}
-          {s.interchange ? <Pill text="Interchange" icon="arrow.triangle.swap" tone="accent" /> : null}
-          {s.tags.includes('Divyang Friendly Station') ? <Pill text="Accessible" icon="figure.roll" tone="success" /> : null}
-          {s.tags.includes('Parking Available') ? <Pill text="Parking" icon="parkingsign" /> : null}
-          {home === code ? <Pill text="Home" icon="house.fill" tone="accent" /> : null}
-          {work === code ? <Pill text="Work" icon="briefcase.fill" tone="accent" /> : null}
-        </View>
 
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
           <Button
             title="Route from"
             kind="secondary"
-            icon="arrow.up.right"
             style={{ flex: 1 }}
             onPress={() => {
               usePlanner.getState().set({ from: code, fromIsLocation: false });
@@ -120,8 +206,7 @@ export default function StationScreen() {
             }}
           />
           <Button
-            title="Route to"
-            icon="flag.fill"
+            title="Route here"
             style={{ flex: 1 }}
             onPress={() => {
               const p = usePlanner.getState();
@@ -154,250 +239,65 @@ export default function StationScreen() {
           </Card>
         ) : null}
 
-        <SectionHeader title="First & last trains" />
+        <SectionHeader title="Trains" />
         <Card pad={0} style={{ paddingHorizontal: 14 }}>
           {dirs.length ? (
-            dirs.map((dir, i) => {
-              const l = getLine(dir.line);
-              return (
-                <View key={dir.neighbour}>
-                  {i > 0 ? <Divider /> : null}
-                  <View style={{ paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <View style={{ width: 6, alignSelf: 'stretch', borderRadius: 3, backgroundColor: l.color }} />
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <T v="bodyStrong" numberOfLines={1}>
-                        To {titleTowards(dir.timing.to)}
+            <>
+              <View style={{ flexDirection: 'row', paddingTop: 12, paddingBottom: 2 }}>
+                <View style={{ flex: 1 }} />
+                <T v="micro" faint style={{ width: 54, textAlign: 'right' }}>
+                  First
+                </T>
+                <T v="micro" faint style={{ width: 54, textAlign: 'right' }}>
+                  Last
+                </T>
+              </View>
+              {dirs.map((dir, i) => {
+                const l = getLine(dir.line);
+                return (
+                  <View key={dir.neighbour}>
+                    {i > 0 ? <Divider inset={18} /> : null}
+                    <View style={{ paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: l.color }} />
+                      <View style={{ flex: 1 }}>
+                        <T v="body" numberOfLines={1}>
+                          {titleTowards(dir.timing.to)}
+                        </T>
+                        {dir.timing.platform ? (
+                          <T v="caption" faint numberOfLines={1}>
+                            {dir.timing.platform}
+                          </T>
+                        ) : null}
+                      </View>
+                      <T v="mono" dim style={{ width: 54, textAlign: 'right' }}>
+                        {hm(dir.timing.first)}
                       </T>
-                      <T v="caption" dim numberOfLines={1}>
-                        {lineLabel(l)}
-                        {dir.timing.platform ? ` · ${dir.timing.platform}` : ''} · next stop {getStation(dir.neighbour).name}
-                      </T>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <T v="mono">{hm(dir.timing.first)}</T>
-                      <T v="mono" color={c.danger}>
+                      <T v="mono" style={{ width: 54, textAlign: 'right' }}>
                         {hm(dir.timing.last)}
                       </T>
                     </View>
                   </View>
-                </View>
-              );
-            })
+                );
+              })}
+            </>
           ) : (
             <View style={{ paddingVertical: 14 }}>
-              <T v="caption" dim>
-                Station hours {s.open || '—'} – {s.close || '—'}
+              <T v="body" dim>
+                Open {s.open || '—'} – {s.close || '—'}
               </T>
             </View>
           )}
-          <Divider />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10 }}>
-            <T v="caption" faint>
-              Top: first train · Red: last train · DMRC timetable
-            </T>
-          </View>
         </Card>
 
-        {d?.platforms?.length ? (
+        {sections.length ? (
           <>
-            <SectionHeader title="Platforms" />
+            <SectionHeader title="Station" />
             <Card pad={0} style={{ paddingHorizontal: 14 }}>
-              {d.platforms.map((p, i) => (
-                <View key={p.name}>
-                  {i > 0 ? <Divider /> : null}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, gap: 10 }}>
-                    <View
-                      style={{
-                        minWidth: 34,
-                        height: 26,
-                        borderRadius: 6,
-                        backgroundColor: c.surface2,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        paddingHorizontal: 6,
-                      }}>
-                      <T v="label">{p.name.replace(/Platform No\.?\s*/i, '').replace(/\s*\(.*\)/, '') || p.name}</T>
-                    </View>
-                    <T v="body" style={{ flex: 1 }} numberOfLines={2}>
-                      Towards{' '}
-                      {[p.to, p.to2]
-                        .filter(Boolean)
-                        .map((x) => stationByCode.get(x!)?.name ?? x)
-                        .join(' / ')}
-                      {/\(Airport Express\)/.test(p.name) ? ' (Airport Express)' : ''}
-                    </T>
-                  </View>
-                </View>
+              {sections.map((sec, i) => (
+                <Disclosure key={sec.title} first={i === 0} title={sec.title} detail={sec.detail} tone={sec.tone}>
+                  {sec.body}
+                </Disclosure>
               ))}
-            </Card>
-          </>
-        ) : null}
-
-        {gates.length ? (
-          <>
-            <SectionHeader
-              title={`Gates · ${gates.length}`}
-              action={gates.length > 4 ? (showAllGates ? 'Less' : 'All') : undefined}
-              onAction={() => setShowAllGates((v) => !v)}
-            />
-            <Card pad={0} style={{ paddingHorizontal: 14 }}>
-              {(showAllGates ? gates : gates.slice(0, 4)).map((g, i) => (
-                <View key={g.name + i}>
-                  {i > 0 ? <Divider /> : null}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, gap: 10 }}>
-                    <Icon name="door.left.hand.open" size={16} color={g.open ? c.text2 : c.danger} />
-                    <View style={{ flex: 1 }}>
-                      <T v="bodyStrong">
-                        {g.name}
-                        {g.open ? '' : ' · Closed'}
-                      </T>
-                      {g.loc ? (
-                        <T v="caption" dim numberOfLines={2}>
-                          {g.loc}
-                        </T>
-                      ) : null}
-                    </View>
-                    {g.divyang ? <Icon name="figure.roll" size={14} color={c.success} /> : null}
-                  </View>
-                </View>
-              ))}
-            </Card>
-          </>
-        ) : null}
-
-        {d?.lifts?.length ? (
-          <>
-            <SectionHeader title="Lifts & escalators" action={showLifts ? 'Hide' : 'Show all'} onAction={() => setShowLifts((v) => !v)} />
-            <Card style={{ gap: 10 }}>
-              <View style={{ flexDirection: 'row', gap: 20 }}>
-                <Stat label="Lifts" value={lifts.length} sub={`${lifts.filter((l) => l.ok).length} working`} />
-                <Stat label="Escalators" value={escalators.length} sub={`${escalators.filter((l) => l.ok).length} working`} />
-              </View>
-              {showLifts
-                ? d.lifts.map((l, i) => (
-                    <View key={l.name + i} style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
-                      <Icon
-                        name={l.type === 'Lift' ? 'arrow.up.arrow.down.square' : 'stairs'}
-                        size={14}
-                        color={l.ok ? c.text2 : c.danger}
-                        style={{ marginTop: 2 }}
-                      />
-                      <T v="caption" dim style={{ flex: 1 }}>
-                        <T v="caption" style={{ fontFamily: 'Inter-SemiBold' }}>
-                          {l.name}
-                        </T>
-                        {l.loc ? ` — ${l.loc}` : ''}
-                        {l.side ? ` (${l.side.toLowerCase()})` : ''}
-                        {l.ok ? '' : ' · Not working'}
-                      </T>
-                    </View>
-                  ))
-                : null}
-            </Card>
-          </>
-        ) : null}
-
-        {d?.facilities?.length ? (
-          <>
-            <SectionHeader title="Facilities" />
-            <Card pad={0} style={{ paddingHorizontal: 14 }}>
-              {d.facilities.map((f, i) => (
-                <View key={f.kind}>
-                  {i > 0 ? <Divider inset={44} /> : null}
-                  <Row
-                    icon={FAC_ICON[f.kind] ?? 'info.circle.fill'}
-                    title={`${f.kind}${f.items.length > 1 ? ` · ${f.items.length}` : ''}`}
-                    subtitleLines={0}
-                    subtitle={f.items.map((it) => [it.name !== f.kind ? it.name : '', it.loc].filter(Boolean).join(': ')).join('\n')}
-                  />
-                </View>
-              ))}
-            </Card>
-          </>
-        ) : null}
-
-        {d?.parking?.length ? (
-          <>
-            <SectionHeader title="Parking" />
-            <Card pad={0} style={{ paddingHorizontal: 14 }}>
-              {d.parking.map((p, i) => (
-                <View key={i}>
-                  {i > 0 ? <Divider inset={44} /> : null}
-                  <Row
-                    icon="parkingsign.circle.fill"
-                    iconColor="#2A5BD7"
-                    title={p.by || 'Parking'}
-                    subtitle={[
-                      p.loc,
-                      [p.car ? `${p.car} cars` : '', p.bike ? `${p.bike} two-wheelers` : '', p.cycle ? `${p.cycle} cycles` : ''].filter(Boolean).join(' · '),
-                    ]
-                      .filter(Boolean)
-                      .join('\n')}
-                  />
-                </View>
-              ))}
-            </Card>
-          </>
-        ) : null}
-
-        {d?.feeder?.length ? (
-          <>
-            <SectionHeader title="Feeder buses" />
-            <Card pad={0} style={{ paddingHorizontal: 14 }}>
-              {d.feeder.map((f, i) => (
-                <View key={i}>
-                  {i > 0 ? <Divider inset={44} /> : null}
-                  <Row
-                    icon="bus.fill"
-                    iconColor="#1F9D55"
-                    subtitleLines={0}
-                    title={`${f.route_num ?? 'Route'} · ${f.destination ?? ''}`}
-                    subtitle={[f.area_covered, f.service_frequency ? `Every ${f.service_frequency}` : '', f.fare].filter(Boolean).join('\n')}
-                  />
-                </View>
-              ))}
-            </Card>
-          </>
-        ) : null}
-
-        {d?.nearby?.length ? <Nearby items={d.nearby} /> : null}
-
-        {d?.mobile || d?.landline ? (
-          <>
-            <SectionHeader title="Contact station" />
-            <Card pad={0} style={{ paddingHorizontal: 14 }}>
-              {d.mobile ? (
-                <Row
-                  icon="phone.fill"
-                  iconColor="#1F9D55"
-                  title={d.mobile}
-                  subtitle="Station mobile"
-                  onPress={() => Linking.openURL(`tel:${d.mobile}`)}
-                  chevron
-                />
-              ) : null}
-              {d.mobile && d.landline ? <Divider inset={44} /> : null}
-              {d.landline ? (
-                <Row
-                  icon="phone"
-                  iconColor="#1F9D55"
-                  title={d.landline}
-                  subtitle="Station landline"
-                  onPress={() => Linking.openURL(`tel:${d.landline}`)}
-                  chevron
-                />
-              ) : null}
-            </Card>
-          </>
-        ) : null}
-
-        {d?.desc ? (
-          <>
-            <SectionHeader title="About" />
-            <Card>
-              <T v="body" dim>
-                {d.desc}
-              </T>
             </Card>
           </>
         ) : null}
@@ -406,18 +306,24 @@ export default function StationScreen() {
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: number; sub: string }) {
-  return (
-    <View>
-      <T v="micro" faint>
-        {label}
-      </T>
-      <T v="title">{value}</T>
-      <T v="caption" dim>
-        {sub}
-      </T>
+function Item({ title, sub, icon, bad, onPress }: { title: string; sub?: string; icon?: any; bad?: boolean; onPress?: () => void }) {
+  const { c } = useTheme();
+  const body = (
+    <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+      {icon ? <Icon name={icon} size={14} color={bad ? c.danger : c.text3} style={{ marginTop: 3 }} /> : null}
+      <View style={{ flex: 1 }}>
+        <T v="label" color={bad ? c.danger : onPress ? c.accent : c.text}>
+          {title}
+        </T>
+        {sub ? (
+          <T v="caption" dim>
+            {sub}
+          </T>
+        ) : null}
+      </View>
     </View>
   );
+  return onPress ? <Press onPress={onPress}>{body}</Press> : body;
 }
 
 function Nearby({ items }: { items: NonNullable<ReturnType<typeof getDetails>>['nearby'] }) {
@@ -433,14 +339,11 @@ function Nearby({ items }: { items: NonNullable<ReturnType<typeof getDetails>>['
   }, [items]);
   const [open, setOpen] = useState<string | null>(null);
   return (
-    <>
-      <SectionHeader title="Nearby places" />
-      <Card pad={0} style={{ paddingHorizontal: 14 }}>
-        {groups.map(([k, list], i) => (
+    <View>
+        {groups.map(([k, list]) => (
           <View key={k}>
-            {i > 0 ? <Divider /> : null}
-            <Press onPress={() => setOpen(open === k ? null : k)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 10 }}>
-              <T v="bodyStrong" style={{ flex: 1 }}>
+            <Press onPress={() => setOpen(open === k ? null : k)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 }}>
+              <T v="label" style={{ flex: 1 }}>
                 {k}
               </T>
               <T v="caption" dim>
@@ -450,8 +353,8 @@ function Nearby({ items }: { items: NonNullable<ReturnType<typeof getDetails>>['
             </Press>
             {open === k
               ? list.map((it, j) => (
-                  <View key={j} style={{ paddingBottom: 10, paddingLeft: 4 }}>
-                    <T v="body">{it.name}</T>
+                  <View key={j} style={{ paddingBottom: 8, paddingLeft: 12 }}>
+                    <T v="caption">{it.name}</T>
                     <T v="caption" dim>
                       {[
                         it.group === 'Emergency' ? it.cat : '',
@@ -467,7 +370,6 @@ function Nearby({ items }: { items: NonNullable<ReturnType<typeof getDetails>>['
               : null}
           </View>
         ))}
-      </Card>
-    </>
+    </View>
   );
 }

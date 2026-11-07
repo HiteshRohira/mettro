@@ -17,10 +17,6 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Label>Map</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'map', selected: 'map.fill' }} md="map" />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="lines">
-        <NativeTabs.Trigger.Label>Lines</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={{ default: 'tram', selected: 'tram.fill' }} md="train" />
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="more">
         <NativeTabs.Trigger.Label>More</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'square.grid.2x2', selected: 'square.grid.2x2.fill' }} md="apps" />

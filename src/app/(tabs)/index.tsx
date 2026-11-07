@@ -4,32 +4,24 @@ import { useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { StatusSummary } from '@/components/status';
+import { ServiceAlerts } from '@/components/status';
 import { TripBanner } from '@/components/trip-banner';
-import { Button, Card, Divider, Icon, LineDots, Pill, Press, SectionHeader, T } from '@/components/ui';
-import { fmtClock, fmtKm, hm, walkMin } from '@/lib/format';
+import { Button, Card, Divider, Icon, LineDots, Press, SectionHeader, T } from '@/components/ui';
+import { fmtClock, hm, hmToMinutes, walkMin } from '@/lib/format';
 import { directionsAt, getStation, stationColors, titleTowards } from '@/lib/network';
 import { useNearest } from '@/lib/useLocation';
-import { usePlanner } from '@/store/planner';
 import { useNow } from '@/lib/useNow';
+import { usePlanner } from '@/store/planner';
 import { useSettings } from '@/store/settings';
-import { disruptedLines, useStatus } from '@/store/status';
+import { useStatus } from '@/store/status';
 import { radius, useTheme } from '@/theme';
-
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 5) return 'Late night';
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-}
 
 export default function PlanScreen() {
   const { c, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const { from, to, when, fromIsLocation, set, swap } = usePlanner();
   const { home, work, recents, favourites } = useSettings();
-  const status = useStatus();
+  const refreshStatus = useStatus((s) => s.refresh);
   const { list: nearby, status: locStatus, refresh: refreshLoc } = useNearest(3, false);
   const [refreshing, setRefreshing] = useState(false);
   const [showTime, setShowTime] = useState(false);
@@ -51,101 +43,69 @@ export default function PlanScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([status.refresh(), refreshLoc()]);
+    await Promise.all([refreshStatus(), refreshLoc()]);
     setRefreshing(false);
   };
 
-  const bad = disruptedLines(status.lines);
+  const shortcuts = [
+    home ? { key: 'home', icon: 'house.fill' as const, title: 'Home', code: home } : null,
+    work ? { key: 'work', icon: 'briefcase.fill' as const, title: 'Work', code: work } : null,
+  ].filter((x) => !!x && x.code !== from);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top }}>
       <ScrollView
         contentInsetAdjustmentBehavior="never"
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingTop: 8, paddingHorizontal: 16, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingTop: 12, paddingHorizontal: 16, paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         keyboardShouldPersistTaps="handled">
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <View>
-            <T v="caption" dim>
-              {greeting()} · Delhi Metro
-            </T>
-            <T v="display">Where to?</T>
-          </View>
-          <Press onPress={() => router.push('/lines')} hitSlop={8}>
-            <Pill
-              text={status.checkedAt ? (bad.length ? `${bad.length} disrupted` : 'All normal') : 'Status'}
-              tone={status.checkedAt ? (bad.length ? 'danger' : 'success') : 'neutral'}
-              icon={bad.length ? 'exclamationmark.triangle.fill' : 'checkmark.circle.fill'}
-            />
-          </Press>
-        </View>
+        <T v="display" style={{ marginBottom: 16 }}>
+          Where to?
+        </T>
 
         <TripBanner />
+        <ServiceAlerts style={{ marginBottom: 12 }} />
 
         <Card pad={0} style={{ overflow: 'hidden' }}>
           <View style={{ flexDirection: 'row', alignItems: 'stretch' }}>
-            <View style={{ width: 36, alignItems: 'center', paddingTop: 22, paddingBottom: 22 }}>
-              <View style={{ width: 10, height: 10, borderRadius: 5, borderWidth: 2.5, borderColor: c.text }} />
-              <View style={{ flex: 1, width: 2, backgroundColor: c.border, marginVertical: 4 }} />
-              <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: c.text }} />
+            <View style={{ width: 36, alignItems: 'center', paddingVertical: 24 }}>
+              <View style={{ width: 9, height: 9, borderRadius: 5, borderWidth: 2, borderColor: c.text2 }} />
+              <View style={{ flex: 1, width: 1.5, backgroundColor: c.border, marginVertical: 4 }} />
+              <View style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: c.text }} />
             </View>
             <View style={{ flex: 1 }}>
-              <Press onPress={() => router.push({ pathname: '/pick', params: { field: 'from' } })} style={{ paddingVertical: 14, paddingRight: 12 }}>
-                <T v="micro" faint>
-                  From{fromIsLocation && from ? ' · Nearest to you' : ''}
-                </T>
-                <T v="h3" numberOfLines={1} style={{ marginTop: 3 }} color={from ? c.text : c.text3}>
-                  {from ? getStation(from).name : 'Choose starting station'}
-                </T>
-              </Press>
+              <StationField
+                value={from}
+                placeholder="From"
+                hint={fromIsLocation && from ? 'location.fill' : undefined}
+                onPress={() => router.push({ pathname: '/pick', params: { field: 'from' } })}
+              />
               <Divider />
-              <Press onPress={() => router.push({ pathname: '/pick', params: { field: 'to' } })} style={{ paddingVertical: 14, paddingRight: 12 }}>
-                <T v="micro" faint>
-                  To
-                </T>
-                <T v="h3" numberOfLines={1} style={{ marginTop: 3 }} color={to ? c.text : c.text3}>
-                  {to ? getStation(to).name : 'Choose destination'}
-                </T>
-              </Press>
+              <StationField value={to} placeholder="To" onPress={() => router.push({ pathname: '/pick', params: { field: 'to' } })} />
             </View>
-            <Press onPress={swap} accessibilityLabel="Swap stations" style={{ width: 52, alignItems: 'center', justifyContent: 'center' }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="arrow.up.arrow.down" size={15} color={c.text2} />
-              </View>
+            <Press onPress={swap} accessibilityLabel="Swap stations" style={{ width: 48, alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="arrow.up.arrow.down" size={15} color={c.text3} />
             </Press>
           </View>
           <Divider />
-          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10, paddingLeft: 14, gap: 10 }}>
             <Press
               onPress={() => setShowTime((v) => !v)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                backgroundColor: c.surface2,
-                borderRadius: radius.pill,
-                paddingHorizontal: 12,
-                height: 34,
-              }}>
-              <Icon name="clock" size={13} color={c.text2} />
-              <T v="label">{when ? `Depart ${fmtClock(when)}` : 'Leave now'}</T>
+              hitSlop={8}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}
+              accessibilityLabel="Departure time">
+              <Icon name="clock" size={13} color={when ? c.text : c.text3} />
+              <T v="label" color={when ? c.text : c.text2}>
+                {when ? `Depart ${fmtClock(when)}` : 'Leave now'}
+              </T>
+              {when ? (
+                <Press onPress={() => set({ when: null })} hitSlop={8} accessibilityLabel="Leave now">
+                  <Icon name="xmark.circle.fill" size={14} color={c.text3} />
+                </Press>
+              ) : null}
             </Press>
-            {when ? (
-              <Press onPress={() => set({ when: null })} hitSlop={8}>
-                <T v="label" color={c.accent}>
-                  Now
-                </T>
-              </Press>
-            ) : null}
-            <View style={{ flex: 1 }} />
-            <Button
-              title="Find route"
-              icon="arrow.right"
-              onPress={() => go()}
-              disabled={!from || !to || from === to}
-              style={{ height: 40, paddingHorizontal: 14 }}
-            />
+            <Button title="Find route" onPress={() => go()} disabled={!from || !to || from === to} style={{ height: 40, paddingHorizontal: 18 }} />
           </View>
           {showTime ? (
             <View style={{ paddingHorizontal: 12, paddingBottom: 12, alignItems: 'flex-start' }}>
@@ -161,38 +121,45 @@ export default function PlanScreen() {
           ) : null}
         </Card>
 
-        {(home || work) && (
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-            {home ? <QuickChip icon="house.fill" title="Home" sub={getStation(home).name} onPress={() => from && go(from, home)} /> : null}
-            {work ? <QuickChip icon="briefcase.fill" title="Work" sub={getStation(work).name} onPress={() => from && go(from, work)} /> : null}
+        {shortcuts.length ? (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            {shortcuts.map((s) => (
+              <Press
+                key={s!.key}
+                onPress={() => from && go(from, s!.code)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  height: 36,
+                  paddingHorizontal: 14,
+                  borderRadius: radius.pill,
+                  backgroundColor: c.surface,
+                  borderWidth: 0.5,
+                  borderColor: c.border,
+                }}>
+                <Icon name={s!.icon} size={12} color={c.text2} />
+                <T v="label">{s!.title}</T>
+              </Press>
+            ))}
           </View>
-        )}
-
-        {bad.length ? (
-          <>
-            <SectionHeader title="Service alerts" />
-            <StatusSummary compact />
-          </>
         ) : null}
-
-        <SectionHeader title="Nearby" action={locStatus === 'denied' ? 'Enable location' : 'Refresh'} onAction={() => refreshLoc()} />
-        <NearbyList nearby={nearby} locStatus={locStatus} onEnable={refreshLoc} />
 
         {recents.length ? (
           <>
             <SectionHeader title="Recent" action="Clear" onAction={() => useSettings.getState().set({ recents: [] })} />
             <Card pad={0} style={{ paddingHorizontal: 14 }}>
-              {recents.slice(0, 5).map((r, i) => (
+              {recents.slice(0, 3).map((r, i) => (
                 <View key={r.from + r.to}>
                   {i > 0 ? <Divider /> : null}
-                  <Press onPress={() => go(r.from, r.to)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 13, gap: 12 }}>
-                    <Icon name="clock.arrow.circlepath" size={16} color={c.text3} />
-                    <View style={{ flex: 1 }}>
-                      <T v="bodyStrong" numberOfLines={1}>
-                        {getStation(r.from).name} → {getStation(r.to).name}
+                  <Press onPress={() => go(r.from, r.to)} style={{ paddingVertical: 13 }}>
+                    <T v="body" numberOfLines={1}>
+                      {getStation(r.from).name}
+                      <T v="body" faint>
+                        {'  →  '}
                       </T>
-                    </View>
-                    <Icon name="chevron.right" size={12} color={c.text3} />
+                      {getStation(r.to).name}
+                    </T>
                   </Press>
                 </View>
               ))}
@@ -200,31 +167,19 @@ export default function PlanScreen() {
           </>
         ) : null}
 
+        <NearbySection nearby={nearby} locStatus={locStatus} onEnable={refreshLoc} now={now} />
+
         {favourites.length ? (
           <>
-            <SectionHeader title="Saved stations" />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-              {favourites.map((code) => {
-                const s = getStation(code);
-                return (
-                  <Press key={code} onPress={() => router.push({ pathname: '/station/[code]', params: { code } })}>
-                    <Card style={{ width: 150, gap: 8 }} pad={12}>
-                      <LineDots colors={stationColors(s)} />
-                      <T v="bodyStrong" numberOfLines={2}>
-                        {s.name}
-                      </T>
-                    </Card>
-                  </Press>
-                );
-              })}
-            </ScrollView>
-          </>
-        ) : null}
-
-        {!bad.length ? (
-          <>
-            <SectionHeader title="Network status" action="All lines" onAction={() => router.push('/lines')} />
-            <StatusSummary compact />
+            <SectionHeader title="Saved" />
+            <Card pad={0} style={{ paddingHorizontal: 14 }}>
+              {favourites.map((code, i) => (
+                <View key={code}>
+                  {i > 0 ? <Divider /> : null}
+                  <StationRow code={code} />
+                </View>
+              ))}
+            </Card>
           </>
         ) : null}
       </ScrollView>
@@ -232,108 +187,108 @@ export default function PlanScreen() {
   );
 }
 
-function QuickChip({ icon, title, sub, onPress }: { icon: any; title: string; sub: string; onPress: () => void }) {
+function StationField({ value, placeholder, hint, onPress }: { value: string | null; placeholder: string; hint?: 'location.fill'; onPress: () => void }) {
   const { c } = useTheme();
   return (
-    <Press onPress={onPress} style={{ flex: 1 }}>
-      <Card pad={12} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name={icon} size={14} color={c.accent} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <T v="bodyStrong">{title}</T>
-          <T v="caption" dim numberOfLines={1}>
-            {sub}
-          </T>
-        </View>
-      </Card>
+    <Press onPress={onPress} style={{ height: 54, justifyContent: 'center', paddingRight: 4 }} accessibilityLabel={placeholder}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <T v="h3" numberOfLines={1} color={value ? c.text : c.text3} style={{ flexShrink: 1, fontFamily: value ? undefined : 'Inter-Medium' }}>
+          {value ? getStation(value).name : placeholder}
+        </T>
+        {hint ? <Icon name={hint} size={11} color={c.accent} /> : null}
+      </View>
     </Press>
   );
 }
 
-function NearbyList({ nearby, locStatus, onEnable }: { nearby: ReturnType<typeof useNearest>['list']; locStatus: string; onEnable: () => void }) {
+function NearbySection({
+  nearby,
+  locStatus,
+  onEnable,
+  now,
+}: {
+  nearby: ReturnType<typeof useNearest>['list'];
+  locStatus: string;
+  onEnable: () => void;
+  now: number;
+}) {
+  const { c } = useTheme();
+  // Outside Delhi NCR, nearby stations are meaningless — say nothing.
+  if (nearby.length && nearby[0].km > 40) return null;
   if (locStatus === 'denied' || (!nearby.length && locStatus !== 'loading')) {
     return (
-      <Card style={{ alignItems: 'flex-start', gap: 10 }}>
-        <T v="bodyStrong">Find stations near you</T>
-        <T v="caption" dim>
-          Allow location access to see the nearest metro stations, walking time and their last trains.
-        </T>
-        <Button title="Use my location" icon="location.fill" kind="secondary" onPress={onEnable} style={{ height: 40 }} />
-      </Card>
+      <>
+        <SectionHeader title="Nearby" />
+        <Press onPress={onEnable}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Icon name="location" size={15} color={c.accent} />
+            <T v="body" color={c.accent} style={{ flex: 1 }}>
+              Show stations near me
+            </T>
+          </Card>
+        </Press>
+      </>
     );
   }
-  if (!nearby.length) {
-    return (
-      <Card>
-        <T v="caption" dim>
-          Locating…
-        </T>
-      </Card>
-    );
-  }
-  if (nearby[0].km > 40) {
-    return (
-      <Card style={{ gap: 6 }}>
-        <T v="bodyStrong">You’re outside Delhi NCR</T>
-        <T v="caption" dim>
-          The nearest Delhi Metro station ({nearby[0].station.name}) is {Math.round(nearby[0].km)} km away. Nearby suggestions will appear when you’re in the
-          city.
-        </T>
-      </Card>
-    );
-  }
+  if (!nearby.length) return null;
   return (
-    <Card pad={0} style={{ paddingHorizontal: 14 }}>
-      {nearby.map(({ station, km }, i) => (
-        <View key={station.code}>
-          {i > 0 ? <Divider /> : null}
-          <NearbyRow code={station.code} km={km} />
-        </View>
-      ))}
-    </Card>
+    <>
+      <SectionHeader title="Nearby" />
+      <Card pad={0} style={{ paddingHorizontal: 14 }}>
+        {nearby.map(({ station, km }, i) => (
+          <View key={station.code}>
+            {i > 0 ? <Divider /> : null}
+            <StationRow code={station.code} walk={walkMin(km)} now={now} />
+          </View>
+        ))}
+      </Card>
+    </>
   );
 }
 
-function NearbyRow({ code, km }: { code: string; km: number }) {
+/** Only surface the last train when it actually matters: within the hour before it leaves. */
+function useLastTrainWarning(code: string, now?: number) {
+  return useMemo(() => {
+    if (now == null) return null;
+    const d = new Date(now);
+    let nowMin = d.getHours() * 60 + d.getMinutes();
+    if (nowMin < 4 * 60) nowMin += 24 * 60;
+    const lasts = directionsAt(code)
+      .filter((x) => x.timing.last)
+      .map((x) => ({ min: hmToMinutes(x.timing.last)!, x }))
+      .sort((a, b) => a.min - b.min);
+    const soonest = lasts.find((l) => l.min >= nowMin);
+    if (!soonest || soonest.min - nowMin > 60) return null;
+    return `Last train ${hm(soonest.x.timing.last)} to ${titleTowards(soonest.x.timing.to)}`;
+  }, [code, now]);
+}
+
+function StationRow({ code, walk, now }: { code: string; walk?: number; now?: number }) {
   const { c } = useTheme();
   const s = getStation(code);
-  const lastInfo = useMemo(() => {
-    const dirs = directionsAt(code);
-    const lasts = dirs.filter((d) => d.timing.last).sort((a, b) => (a.timing.last! < b.timing.last! ? -1 : 1));
-    if (!lasts.length) return null;
-    const earliest = lasts[0];
-    return `Last train ${hm(earliest.timing.last)} towards ${titleTowards(earliest.timing.to)}`;
-  }, [code]);
+  const warn = useLastTrainWarning(code, now);
   return (
     <Press
       onPress={() => router.push({ pathname: '/station/[code]', params: { code } })}
-      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 }}>
-      <View style={{ width: 40, alignItems: 'center' }}>
-        <T v="bodyStrong">{walkMin(km)}</T>
-        <T v="micro" faint style={{ textTransform: 'none' }}>
-          min
-        </T>
-      </View>
-      <View style={{ flex: 1, gap: 3 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <T v="bodyStrong" numberOfLines={1} style={{ flexShrink: 1 }}>
+      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 13, gap: 10 }}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <T v="body" numberOfLines={1} style={{ flexShrink: 1 }}>
             {s.name}
           </T>
-          <LineDots colors={stationColors(s)} size={8} />
+          <LineDots colors={stationColors(s)} size={7} />
         </View>
-        <T v="caption" dim numberOfLines={2}>
-          {fmtKm(km)} away{lastInfo ? ` · ${lastInfo}` : ''}
-        </T>
+        {warn ? (
+          <T v="caption" color={c.warn} numberOfLines={1}>
+            {warn}
+          </T>
+        ) : null}
       </View>
-      <Press
-        hitSlop={6}
-        onPress={() => {
-          usePlanner.getState().set({ from: code, fromIsLocation: false });
-        }}
-        style={{ paddingHorizontal: 10, height: 30, borderRadius: radius.pill, backgroundColor: c.surface2, justifyContent: 'center' }}>
-        <T v="label">From here</T>
-      </Press>
+      {walk != null ? (
+        <T v="label" faint>
+          {walk} min
+        </T>
+      ) : null}
     </Press>
   );
 }

@@ -4,10 +4,10 @@ import { ActivityIndicator, Alert, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { JourneyLegs, JourneySummaryLine } from '@/components/journey-view';
-import { Button, Card, Icon, Pill, Press, T } from '@/components/ui';
+import { Button, Card, Icon, Press, T } from '@/components/ui';
 import { planOnline } from '@/lib/api';
 import { fmtClock, fmtDuration, hm, hmToMinutes } from '@/lib/format';
-import { DIR_TIMINGS, getStation, titleTowards } from '@/lib/network';
+import { DIR_TIMINGS, getLine, getStation, lineLabel, titleTowards } from '@/lib/network';
 import { planOffline, type Journey } from '@/lib/router';
 import { plannedStart, startTrip } from '@/lib/trip';
 import { useStatus, isNormal } from '@/store/status';
@@ -71,7 +71,10 @@ export default function JourneyScreen() {
   const affected = j ? [...new Set(j.legs.map((l) => l.lineId))].filter((id) => !isNormal(lineStatus[id])) : [];
 
   const depart = j ? plannedStart(j, when.getTime()) : 0;
-  const arrive = j ? (j.legs[j.legs.length - 1].arrive ? null : depart + j.totalS * 1000) : 0;
+  const lastArrive = j?.legs[j.legs.length - 1].arrive;
+  const departLabel = j?.legs[0].depart ? hm(j.legs[0].depart) : j ? fmtClock(depart) : '';
+  const arriveLabel = lastArrive ? hm(lastArrive) : j ? fmtClock(depart + j.totalS * 1000) : '';
+  const departLabelFull = departLabel && arriveLabel ? `${departLabel} → ${arriveLabel}` : '';
 
   const onStart = async () => {
     if (!j) return;
@@ -92,36 +95,6 @@ export default function JourneyScreen() {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <Stack.Screen options={{ title: `${fromS.name} → ${toS.name}` }} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 110 }}>
-        {options.length > 1 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 14 }}>
-            {options.map((o, i) => (
-              <Press key={o.id} onPress={() => setSel(i)}>
-                <View
-                  style={{
-                    padding: 12,
-                    borderRadius: radius.lg,
-                    minWidth: 170,
-                    gap: 6,
-                    backgroundColor: c.surface,
-                    borderWidth: i === sel ? 2 : 1,
-                    borderColor: i === sel ? c.text : c.border,
-                  }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <T v="h3">{fmtDuration(o.totalS)}</T>
-                    <T v="label" dim>
-                      {o.fare != null ? `₹${o.fare}` : ''}
-                    </T>
-                  </View>
-                  <JourneySummaryLine j={o} />
-                  <T v="caption" dim>
-                    {o.interchanges === 0 ? 'Direct' : `${o.interchanges} change${o.interchanges > 1 ? 's' : ''}`} · {o.stops} stops
-                  </T>
-                </View>
-              </Press>
-            ))}
-          </ScrollView>
-        ) : null}
-
         {!j ? (
           loading ? (
             <ActivityIndicator style={{ marginTop: 40 }} />
@@ -132,78 +105,79 @@ export default function JourneyScreen() {
           )
         ) : (
           <>
-            <Card style={{ gap: 14 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-                <View>
-                  <T v="micro" faint>
-                    Journey time
-                  </T>
-                  <T v="title">{fmtDuration(j.totalS)}</T>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <T v="micro" faint>
-                    {when.getDay() === 0 ? 'Sunday fare' : 'Token fare'}
-                  </T>
-                  <T v="title">{j.fare != null ? `₹${j.fare}` : '—'}</T>
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                <Pill text={`${j.stops} stops`} icon="smallcircle.filled.circle" />
-                <Pill text={j.interchanges ? `${j.interchanges} change${j.interchanges > 1 ? 's' : ''}` : 'No changes'} icon="arrow.triangle.swap" />
-                {j.legs[0].depart ? <Pill text={`Departs ${hm(j.legs[0].depart)}`} icon="clock" tone="accent" /> : null}
-                {j.legs[j.legs.length - 1].arrive ? (
-                  <Pill text={`Arrives ${hm(j.legs[j.legs.length - 1].arrive)}`} icon="flag.checkered" tone="accent" />
-                ) : arrive ? (
-                  <Pill text={`~Arrive ${fmtClock(arrive)}`} icon="flag.checkered" />
-                ) : null}
-              </View>
-              {j.fareSource === 'estimate' ? (
-                <T v="caption" faint>
-                  {j.fare == null
-                    ? 'Fare depends on the Airport Express / Rapid Metro section — check at the station.'
-                    : 'Estimated fare (offline). Smart card / QR users get a 10% discount; off-peak extra 10%.'}
+            <View style={{ paddingHorizontal: 4, gap: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                <T v="display">{fmtDuration(j.totalS)}</T>
+                <T v="h2" dim={j.fareSource === 'estimate'}>
+                  {j.fare != null ? `${j.fareSource === 'estimate' ? '~' : ''}₹${j.fare}` : ''}
                 </T>
-              ) : (
-                <T v="caption" faint>
-                  Fare and timings from the DMRC journey planner. Smart cards get 10% off (more off-peak).
-                </T>
-              )}
-            </Card>
+              </View>
+              <T v="label" dim>
+                {[
+                  departLabelFull,
+                  j.interchanges ? `${j.interchanges} change${j.interchanges > 1 ? 's' : ''}` : 'Direct',
+                ]
+                  .filter(Boolean)
+                  .join('  ·  ')}
+              </T>
+            </View>
 
-            {offline ? <Notice icon="wifi.slash" tone="warn" text="Couldn’t reach DMRC — showing an offline route with estimated times and fare." /> : null}
+            {options.length > 1 ? (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+                {options.map((o, i) => (
+                  <Press key={o.id} onPress={() => setSel(i)} style={{ flex: 1 }} accessibilityState={{ selected: i === sel }}>
+                    <View
+                      style={{
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: radius.md,
+                        gap: 6,
+                        backgroundColor: i === sel ? c.surface : 'transparent',
+                        borderWidth: 1,
+                        borderColor: i === sel ? c.text : c.border,
+                      }}>
+                      <T v="bodyStrong">{fmtDuration(o.totalS)}</T>
+                      <JourneySummaryLine j={o} />
+                    </View>
+                  </Press>
+                ))}
+              </View>
+            ) : null}
+
+            {offline ? <Notice icon="wifi.slash" tone="warn" text="Offline — times and fare are estimates." /> : null}
             {afterLast ? (
               <Notice
                 icon="moon.zzz.fill"
                 tone="danger"
-                text={`The last train from ${fromS.name} towards ${titleTowards(dirTiming?.to) || firstLeg?.towards} has left (${hm(dirTiming?.last)}). First train tomorrow: ${hm(dirTiming?.first)}.`}
+                text={`Last train towards ${titleTowards(dirTiming?.to) || firstLeg?.towards} has left. First train ${hm(dirTiming?.first)}.`}
               />
             ) : null}
             {beforeFirst ? (
-              <Notice icon="sunrise.fill" tone="warn" text={`Service hasn’t started yet. First train from ${fromS.name}: ${hm(dirTiming?.first)}.`} />
+              <Notice icon="sunrise.fill" tone="warn" text={`Service starts at ${hm(dirTiming?.first)}.`} />
             ) : null}
             {nearLast ? (
               <Notice
                 icon="exclamationmark.triangle.fill"
                 tone="warn"
-                text={`Hurry — last train from ${fromS.name} towards ${firstLeg?.towards} is at ${hm(dirTiming?.last)}.`}
+                text={`Last train towards ${firstLeg?.towards} at ${hm(dirTiming?.last)}.`}
               />
             ) : null}
             {affected.length ? (
               <Notice
                 icon="exclamationmark.octagon.fill"
                 tone="danger"
-                text={`Service alert on ${affected.map((id) => `${id}: ${lineStatus[id]}`).join(', ')}. Expect delays.`}
+                text={affected.map((id) => `${lineLabel(getLine(id))}: ${lineStatus[id]}`).join(' · ')}
               />
             ) : null}
 
-            <Card style={{ marginTop: 12, paddingVertical: 18 }} pad={8}>
+            <Card style={{ marginTop: 16, paddingVertical: 18 }} pad={8}>
               <JourneyLegs j={j} />
             </Card>
             {loading ? (
               <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', marginTop: 14 }}>
                 <ActivityIndicator size="small" />
-                <T v="caption" dim>
-                  Getting live timings from DMRC…
+                <T v="caption" faint>
+                  Getting live times…
                 </T>
               </View>
             ) : null}
@@ -220,13 +194,8 @@ export default function JourneyScreen() {
             padding: 16,
             paddingBottom: insets.bottom + 10,
             backgroundColor: c.bg,
-            borderTopWidth: 0.5,
-            borderTopColor: c.border,
           }}>
-          <Button title="Start trip" icon="location.north.line.fill" onPress={onStart} loading={starting} disabled={afterLast && !loading} />
-          <T v="caption" faint style={{ textAlign: 'center', marginTop: 8 }}>
-            Live Activity on your Lock Screen & Dynamic Island, stop by stop
-          </T>
+          <Button title="Start trip" onPress={onStart} loading={starting} disabled={afterLast && !loading} />
         </View>
       ) : null}
     </View>
@@ -238,7 +207,7 @@ function Notice({ icon, text, tone }: { icon: any; text: string; tone: 'warn' | 
   const bg = tone === 'warn' ? c.warnSoft : c.dangerSoft;
   const fg = tone === 'warn' ? c.warn : c.danger;
   return (
-    <View style={{ flexDirection: 'row', gap: 10, backgroundColor: bg, borderRadius: radius.md, padding: 12, marginTop: 12, alignItems: 'flex-start' }}>
+    <View style={{ flexDirection: 'row', gap: 10, backgroundColor: bg, borderRadius: radius.md, padding: 12, marginTop: 16, alignItems: 'flex-start' }}>
       <Icon name={icon} size={16} color={fg} style={{ marginTop: 1 }} />
       <T v="caption" color={fg} style={{ flex: 1, fontFamily: 'Inter-Medium' }}>
         {text}

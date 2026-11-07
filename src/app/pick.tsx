@@ -4,7 +4,6 @@ import { FlatList, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Divider, Icon, LineDots, Press, T } from '@/components/ui';
-import { fmtKm } from '@/lib/format';
 import { getStation, nearestStations, searchStations, stationColors, type Station } from '@/lib/network';
 import { locate, useNearest } from '@/lib/useLocation';
 import { usePlanner } from '@/store/planner';
@@ -57,7 +56,7 @@ export default function PickScreen() {
             autoFocus
             value={q}
             onChangeText={setQ}
-            placeholder="Search 250+ stations"
+            placeholder="Search stations"
             placeholderTextColor={c.text3}
             autoCorrect={false}
             returnKeyType="search"
@@ -84,15 +83,12 @@ export default function PickScreen() {
                     if (n && n.km < 40) choose(n.station.code, true);
                   }}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 }}>
-                  <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: c.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name="location.fill" size={15} color={c.accent} />
+                  <View style={{ width: 28, alignItems: 'center' }}>
+                    <Icon name="location.fill" size={14} color={c.accent} />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <T v="bodyStrong">Nearest to me</T>
-                    <T v="caption" dim>
-                      {near[0] ? `${near[0].station.name} · ${fmtKm(near[0].km)}` : 'Use current location'}
-                    </T>
-                  </View>
+                  <T v="body" color={c.accent} style={{ flex: 1 }} numberOfLines={1}>
+                    {near[0] ? `Nearest · ${near[0].station.name}` : 'Nearest to me'}
+                  </T>
                 </Press>
               ) : null}
               {near.length && field !== 'from' ? <Group title="Nearby" items={near.map((n) => n.station)} onPick={choose} /> : null}
@@ -128,19 +124,13 @@ function Group({ title, items, onPick }: { title: string; items: Station[]; onPi
 
 function StationItem({ s, onPress }: { s: Station; onPress: () => void }) {
   return (
-    <Press onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13 }}>
-      <View style={{ width: 34, alignItems: 'center' }}>
-        <LineDots colors={stationColors(s)} size={9} />
+    <Press onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 }}>
+      <View style={{ width: 28, alignItems: 'center' }}>
+        <LineDots colors={stationColors(s)} size={8} />
       </View>
-      <View style={{ flex: 1 }}>
-        <T v="bodyStrong" numberOfLines={1}>
-          {s.name}
-        </T>
-        <T v="caption" dim numberOfLines={1}>
-          {s.interchange ? 'Interchange · ' : ''}
-          {s.type}
-        </T>
-      </View>
+      <T v="body" numberOfLines={1} style={{ flex: 1 }}>
+        {s.name}
+      </T>
     </Press>
   );
 }

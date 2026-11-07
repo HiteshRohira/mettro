@@ -19,17 +19,14 @@ export function TripBanner() {
   const fg = onLineColor(line.color);
   return (
     <Press onPress={() => router.push('/trip')} style={{ marginBottom: 12 }}>
-      <View style={{ backgroundColor: line.color, borderRadius: radius.lg, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Icon name="tram.fill" size={22} color={fg} />
+      <View style={{ backgroundColor: line.color, borderRadius: radius.lg, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Icon name="tram.fill" size={18} color={fg} />
         <View style={{ flex: 1 }}>
-          <T v="micro" color={fg} style={{ opacity: 0.8 }}>
-            {p.phase === 'arrived' ? 'Trip complete' : `On your way · arrive ${fmtClock(p.eta)}`}
-          </T>
-          <T v="h3" color={fg} numberOfLines={1}>
+          <T v="bodyStrong" color={fg} numberOfLines={1}>
             {p.phase === 'arrived' ? `Arrived at ${getStation(trip.journey.to).name}` : `Next: ${p.next ? getStation(p.next.code).name : ''}`}
           </T>
-          <T v="caption" color={fg} numberOfLines={1} style={{ opacity: 0.9 }}>
-            {p.action}
+          <T v="caption" color={fg} numberOfLines={1} style={{ opacity: 0.85 }}>
+            {p.phase === 'arrived' ? 'Tap to finish' : `Arrive ${fmtClock(p.eta)} · ${p.action}`}
           </T>
         </View>
         <Icon name="chevron.right" size={14} color={fg} />

@@ -2,9 +2,9 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Card, LineChip, Pill, Press, SectionHeader, T } from '@/components/ui';
+import { Card, LineChip, Press, SectionHeader, T } from '@/components/ui';
 import { hm } from '@/lib/format';
-import { DIR_TIMINGS, getStation, lineById, lineLabel, linesOf, onLineColor } from '@/lib/network';
+import { DIR_TIMINGS, getStation, lineById, lineLabel, linesOf } from '@/lib/network';
 import { isNormal, useStatus } from '@/store/status';
 import { radius, useTheme } from '@/theme';
 
@@ -15,7 +15,6 @@ export default function LineScreen() {
   const line = lineById.get(id);
   const status = useStatus((s) => s.lines[id]);
   if (!line) return null;
-  const fg = onLineColor(line.color);
   const seq = line.stations;
   const first = seq[0];
   const last = seq[seq.length - 1];
@@ -26,38 +25,51 @@ export default function LineScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: lineLabel(line) }} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
-        <View style={{ backgroundColor: line.color, borderRadius: radius.xl, padding: 18, gap: 6 }}>
-          <T v="micro" color={fg} style={{ opacity: 0.8 }}>
-            {line.name} · {count} stations
-          </T>
-          <T v="title" color={fg}>
-            {lineLabel(line)}
-          </T>
-          <T v="body" color={fg} style={{ opacity: 0.9 }}>
-            {line.start} ↔ {line.end}
-          </T>
+      <Stack.Screen options={{ title: '' }} />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: insets.bottom + 40 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ width: 4, alignSelf: 'stretch', borderRadius: 2, backgroundColor: line.color }} />
+          <View style={{ flex: 1 }}>
+            <T v="title">{lineLabel(line)}</T>
+            <T v="label" dim>
+              {count} stations
+            </T>
+          </View>
         </View>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-          <Pill text={status ?? 'Unknown'} tone={ok ? 'success' : 'danger'} icon={ok ? 'checkmark.circle.fill' : 'exclamationmark.triangle.fill'} />
-        </View>
+        {!ok ? (
+          <View style={{ marginTop: 14, backgroundColor: c.dangerSoft, borderRadius: radius.md, padding: 12 }}>
+            <T v="label" color={c.danger}>
+              {status}
+            </T>
+          </View>
+        ) : null}
 
-        <SectionHeader title="From the terminals" />
-        <Card style={{ gap: 12 }}>
+        <Card pad={0} style={{ paddingHorizontal: 14, marginTop: 20 }}>
+          <View style={{ flexDirection: 'row', paddingTop: 12, paddingBottom: 2 }}>
+            <T v="micro" faint style={{ flex: 1 }}>
+              From
+            </T>
+            <T v="micro" faint style={{ width: 54, textAlign: 'right' }}>
+              First
+            </T>
+            <T v="micro" faint style={{ width: 54, textAlign: 'right' }}>
+              Last
+            </T>
+          </View>
           {[
             { from: first, t: fwd },
             { from: last, t: bwd },
           ].map(({ from, t }) => (
-            <View key={from} style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={{ flex: 1 }}>
-                <T v="bodyStrong" numberOfLines={1}>
-                  {getStation(from).name}
-                </T>
-                <T v="caption" dim>
-                  First {hm(t?.first)} · Last {hm(t?.last)}
-                </T>
-              </View>
+            <View key={from} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}>
+              <T v="body" numberOfLines={1} style={{ flex: 1 }}>
+                {getStation(from).name}
+              </T>
+              <T v="mono" dim style={{ width: 54, textAlign: 'right' }}>
+                {hm(t?.first)}
+              </T>
+              <T v="mono" style={{ width: 54, textAlign: 'right' }}>
+                {hm(t?.last)}
+              </T>
             </View>
           ))}
         </Card>

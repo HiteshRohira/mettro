@@ -168,44 +168,6 @@ export function SectionHeader({ title, action, onAction, style }: { title: strin
   );
 }
 
-export function Pill({
-  text,
-  tone = 'neutral',
-  icon,
-}: {
-  text: string;
-  tone?: 'neutral' | 'success' | 'warn' | 'danger' | 'accent';
-  icon?: SymbolViewProps['name'];
-}) {
-  const { c } = useTheme();
-  const map = {
-    neutral: [c.surface2, c.text2],
-    success: [c.successSoft, c.success],
-    warn: [c.warnSoft, c.warn],
-    danger: [c.dangerSoft, c.danger],
-    accent: [c.accentSoft, c.accent],
-  } as const;
-  const [bg, fg] = map[tone];
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: bg,
-        borderRadius: radius.pill,
-        paddingHorizontal: 9,
-        paddingVertical: 4,
-        alignSelf: 'flex-start',
-      }}>
-      {icon ? <Icon name={icon} size={11} color={fg} /> : null}
-      <T v="caption" color={fg} style={{ fontFamily: font.semibold }}>
-        {text}
-      </T>
-    </View>
-  );
-}
-
 export function Divider({ inset = 0 }: { inset?: number }) {
   const { c } = useTheme();
   return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.border, marginLeft: inset }} />;
@@ -243,7 +205,7 @@ export function Row({
           </View>
         ) : null)}
       <View style={{ flex: 1 }}>
-        <T v="bodyStrong" numberOfLines={2}>
+        <T v="body" numberOfLines={2}>
           {title}
         </T>
         {subtitle ? (
@@ -270,6 +232,45 @@ export function Empty({ icon, title, text }: { icon: SymbolViewProps['name']; ti
           {text}
         </T>
       ) : null}
+    </View>
+  );
+}
+
+/** A quiet row that reveals its content on tap — used for secondary detail. */
+export function Disclosure({
+  title,
+  detail,
+  tone,
+  children,
+  first,
+}: {
+  title: string;
+  detail?: string;
+  tone?: 'danger';
+  children: React.ReactNode;
+  first?: boolean;
+}) {
+  const { c } = useTheme();
+  const [open, setOpen] = React.useState(false);
+  return (
+    <View>
+      {first ? null : <Divider />}
+      <Press
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 48, gap: 10 }}>
+        <T v="body" style={{ flex: 1 }}>
+          {title}
+        </T>
+        {detail ? (
+          <T v="label" color={tone === 'danger' ? c.danger : c.text3}>
+            {detail}
+          </T>
+        ) : null}
+        <Icon name={open ? 'chevron.up' : 'chevron.down'} size={11} color={c.text3} />
+      </Press>
+      {open ? <View style={{ paddingBottom: 14, gap: 10 }}>{children}</View> : null}
     </View>
   );
 }

@@ -1,10 +1,10 @@
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, Empty, Icon, LineChip, Pill, Press, T } from '@/components/ui';
-import { ago, fmtClock } from '@/lib/format';
+import { Button, Card, Empty, LineChip, Press, T } from '@/components/ui';
+import { fmtClock } from '@/lib/format';
 import { getLine, getStation, lineLabel, onLineColor } from '@/lib/network';
 import { computeProgress, setPosition, stopTrip, tick } from '@/lib/trip';
 import { useTrip } from '@/store/trip';
@@ -24,7 +24,7 @@ export default function TripScreen() {
   if (!trip) {
     return (
       <View style={{ flex: 1, backgroundColor: c.bg, padding: 16 }}>
-        <Empty icon="tram" title="No active trip" text="Plan a route and tap Start trip to get live stop-by-stop tracking and a Live Activity." />
+        <Empty icon="tram" title="No active trip" text="Start a trip from any route." />
         <Button title="Plan a trip" onPress={() => router.replace('/')} />
       </View>
     );
@@ -54,21 +54,10 @@ export default function TripScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen
-        options={{
-          headerRight: () => (
-            <Press onPress={end} hitSlop={10}>
-              <T v="bodyStrong" color={c.danger}>
-                End
-              </T>
-            </Press>
-          ),
-        }}
-      />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
-        <View style={{ backgroundColor: line.color, borderRadius: radius.xl, padding: 18, gap: 10 }}>
+        <View style={{ backgroundColor: line.color, borderRadius: radius.xl, padding: 18, gap: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-            <T v="micro" color={fg} style={{ opacity: 0.85, flex: 1 }} numberOfLines={2}>
+            <T v="label" color={fg} style={{ opacity: 0.8, flex: 1 }} numberOfLines={2}>
               {lineLabel(line)} · towards {leg.towards}
             </T>
             <T v="label" color={fg}>
@@ -79,40 +68,28 @@ export default function TripScreen() {
             {p.phase === 'arrived' ? `You’ve arrived at ${getStation(j.to).name}` : `Next: ${p.next ? getStation(p.next.code).name : ''}`}
           </T>
           {p.phase !== 'arrived' ? (
-            <T v="bodyStrong" color={fg} style={{ opacity: 0.9 }}>
+            <T v="body" color={fg} style={{ opacity: 0.9 }}>
               {minsToNext <= 0 ? 'Arriving now' : `in about ${minsToNext} min`} · {p.stopsLeft} stop{p.stopsLeft === 1 ? '' : 's'} to go
             </T>
           ) : null}
-          <View style={{ height: 6, borderRadius: 3, backgroundColor: fg + '33', overflow: 'hidden' }}>
-            <View style={{ height: 6, width: `${Math.round(p.progress * 100)}%`, backgroundColor: fg }} />
+          <View style={{ height: 4, borderRadius: 2, marginVertical: 6, backgroundColor: fg + '33', overflow: 'hidden' }}>
+            <View style={{ height: 4, width: `${Math.round(p.progress * 100)}%`, backgroundColor: fg }} />
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: fg + '22', borderRadius: radius.md, padding: 10 }}>
-            <Icon
-              name={p.phase === 'transfer' ? 'arrow.triangle.swap' : p.phase === 'arrived' ? 'checkmark.circle.fill' : 'mappin.and.ellipse'}
-              size={15}
-              color={fg}
-            />
-            <T v="label" color={fg} style={{ flex: 1 }}>
-              {p.action}
-            </T>
-          </View>
+          <T v="label" color={fg} style={{ opacity: 0.9 }}>
+            {p.action}
+          </T>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-          <Pill
-            icon={gpsFresh ? 'location.fill' : 'clock'}
-            text={gpsFresh ? 'GPS tracking' : trip.lastFix ? `Schedule · GPS ${ago(trip.lastFix.at)}` : 'Following timetable'}
-            tone={gpsFresh ? 'success' : 'neutral'}
-          />
-          {Math.abs(delayMin) >= 2 && p.phase !== 'arrived' ? (
-            <Pill icon="timer" text={delayMin > 0 ? `${delayMin} min behind plan` : `${-delayMin} min ahead`} tone="warn" />
-          ) : null}
-        </View>
-        <T v="caption" faint style={{ marginTop: 8 }}>
-          GPS is unreliable underground, so Mettro blends it with the DMRC timetable. Tap a station to tell it where you are.
+        <T v="caption" faint style={{ marginTop: 10, paddingHorizontal: 4 }}>
+          {[
+            gpsFresh ? 'Tracking by GPS' : 'Following the timetable',
+            Math.abs(delayMin) >= 2 && p.phase !== 'arrived' ? (delayMin > 0 ? `${delayMin} min behind` : `${-delayMin} min ahead`) : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </T>
 
-        <Card style={{ marginTop: 14 }} pad={12}>
+        <Card style={{ marginTop: 12 }} pad={12}>
           {p.pts.map((pt, i) => {
             const passed = i < p.idx;
             const here = i === p.idx;
@@ -173,11 +150,15 @@ export default function TripScreen() {
             );
           })}
         </Card>
+        {p.phase !== 'arrived' ? (
+          <T v="caption" faint style={{ marginTop: 8, paddingHorizontal: 4 }}>
+            Tap a stop to correct your position.
+          </T>
+        ) : null}
 
         {p.phase === 'arrived' ? (
           <Button
             title="Done"
-            icon="checkmark"
             onPress={async () => {
               await stopTrip();
               router.back();
@@ -185,7 +166,7 @@ export default function TripScreen() {
             style={{ marginTop: 16 }}
           />
         ) : (
-          <Button title="End trip" kind="danger" icon="xmark" onPress={end} style={{ marginTop: 16 }} />
+          <Button title="End trip" kind="secondary" onPress={end} style={{ marginTop: 20 }} />
         )}
       </ScrollView>
     </View>
