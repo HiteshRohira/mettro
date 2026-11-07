@@ -352,6 +352,29 @@ async function gps(fix: { lat: number; lng: number; acc: number; at: number }) {
   await gps(at(pts[pts.length - 2].code, Date.now() + 20e3));
   ok('resumed trip not marked dismissed', !T().arrivedAt && !T().activityDismissed, T());
 
+  // ===== Sol re-review of #2 =====
+  // 1. frequent consistent fixes (every 5 s) still place an on-board rider
+  setNow(t0);
+  newTrip(rh, t0);
+  const mi = Math.floor(rhp.length / 2);
+  for (let k = 0; k < 6; k++) await gps(between(rhp[mi].code, rhp[mi + 1].code, 0.3 + k * 0.02, t0 + 20e3 + k * 5e3));
+  ok('5 s fixes place an on-board rider', T().anchor?.idx === mi, T().anchor);
+
+  // 2. a fix held on the final stretch undoes a timed-out arrival
+  const dp = buildTimeline(direct, t0);
+  setNow(t0);
+  newTrip(direct, t0);
+  setNow(dp.at(-1)!.at + 11 * 60e3);
+  await tick();
+  const dst = getStation(direct.to);
+  const prv = getStation(dp[dp.length - 2].code);
+  // ~160 m before the destination, on the final segment
+  const k = 0.16 / Math.max(0.2, Math.hypot((dst.lat - prv.lat) * 111, (dst.lng - prv.lng) * 98));
+  const near = (when: number) => ({ lat: dst.lat + (prv.lat - dst.lat) * k, lng: dst.lng + (prv.lng - dst.lng) * k, acc: 10, at: when });
+  await gps(near(Date.now() + 5e3));
+  await gps(near(Date.now() + 20e3));
+  ok('final-stretch fix undoes timed-out arrival', !T().arrivedAt, [T().arrivedBy, T().anchor]);
+
   Date.now = realNow;
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

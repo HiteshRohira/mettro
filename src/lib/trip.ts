@@ -526,13 +526,17 @@ export async function onFix(fix: Fix) {
     // rider started the trip already on board / after a long GPS gap: accept once a second fix
     // agrees with this one (consistent position, moving no faster than a train).
     const pending = trip.backPending;
-    const agrees =
-      !!pending &&
-      c.tau >= pending.tau - BACK_TOLERANCE_MS &&
-      c.tau - pending.tau <= Math.max(0, fix.at - pending.at) * MAX_PROGRESS_RATE + 2 * 60e3 &&
-      fix.at - pending.at >= 10e3;
-    if (!agrees) {
+    const consistent =
+      !!pending && c.tau >= pending.tau - BACK_TOLERANCE_MS && c.tau - pending.tau <= Math.max(0, fix.at - pending.at) * MAX_PROGRESS_RATE + 2 * 60e3;
+    if (!consistent) {
+      // start a new candidate position
       st.patch({ lastFix: fix, backPending: { tau: c.tau, idx: c.idx, station: c.station, at: fix.at } });
+      await tick();
+      return;
+    }
+    if (fix.at - pending!.at < 10e3) {
+      // agrees, but keep the first timestamp until the sequence spans 10 s
+      st.patch({ lastFix: fix });
       await tick();
       return;
     }
@@ -559,7 +563,7 @@ export async function onFix(fix: Fix) {
   if (atDest && !trip.arrivedAt) {
     patch.arrivedAt = now;
     patch.arrivedBy = 'gps';
-  } else if (!atDest && c.station !== last && trip.arrivedAt && trip.arrivedBy === 'time') {
+  } else if (!atDest && trip.arrivedAt && trip.arrivedBy === 'time') {
     // the clock gave up too early: we're still riding
     patch.arrivedAt = null;
     patch.arrivedBy = null;
