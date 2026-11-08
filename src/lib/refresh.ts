@@ -19,16 +19,18 @@ import StatusWidget from '@/widgets/StatusWidget';
  */
 export const REFRESH_TASK = 'mettro-data-refresh';
 
-/** Where you are for ranking trips: the app's last fix, else the OS's (never prompts). */
+/** Where you are for ranking trips: the app's fix if recent, else the OS's last one (never prompts). */
 async function lastCoords(): Promise<Coords | null> {
-  const mem = useLoc.getState().coords;
-  if (mem) return mem;
+  const { coords: mem, at } = useLoc.getState();
+  if (mem && at && Date.now() - at < 10 * 60e3) return mem;
   try {
     if (!(await Location.getForegroundPermissionsAsync()).granted) return null;
     const p = await Location.getLastKnownPositionAsync({ maxAge: 3 * 3600e3 });
-    return p ? { lat: p.coords.latitude, lng: p.coords.longitude } : null;
+    // whichever fix is newer
+    if (p && (!mem || !at || p.timestamp > at)) return { lat: p.coords.latitude, lng: p.coords.longitude };
+    return mem ?? null;
   } catch {
-    return null;
+    return mem ?? null;
   }
 }
 

@@ -20,7 +20,12 @@ export default function GoScreen() {
       const trip = useSettings.getState().trips.find((t) => t.id === id);
       if (!trip) return router.replace('/');
       const loc = useLoc.getState();
-      const at = loc.coords && loc.at && Date.now() - loc.at < 2 * 60e3 ? loc.coords : await locate(false);
+      const fresh = loc.coords && loc.at && Date.now() - loc.at < 2 * 60e3 ? loc.coords : null;
+      // Underground a new fix can take a long time: wait at most 3 s, then use what we have.
+      const at =
+        fresh ??
+        (await Promise.race([locate(false), new Promise<null>((r) => setTimeout(r, 3000))])) ??
+        useLoc.getState().coords;
       if (!alive) return;
       const { from, to } = orient(trip, at);
       router.replace({ pathname: '/journey', params: { from, to, at: '' } });

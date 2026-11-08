@@ -8,10 +8,14 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { refreshData, registerRefreshTask, updateStatusWidget } from '@/lib/refresh';
 import { whenHydrated } from '@/lib/hydration';
 import { resumeTracking, tick } from '@/lib/trip';
+import { useLoc } from '@/lib/useLocation';
 import { useSettings } from '@/store/settings';
 import { font, useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Deep links (e.g. from the widget) open on top of the tabs, so Back always leads Home.
+export const unstable_settings = { anchor: '(tabs)' };
 
 export default function RootLayout() {
   const { c, dark } = useTheme();
@@ -41,9 +45,14 @@ export default function RootLayout() {
     const unsubTrips = useSettings.subscribe((s, prev) => {
       if (s.trips !== prev.trips) updateStatusWidget();
     });
+    // and with where you are: the most likely trip depends on which station you're near
+    const unsubLoc = useLoc.subscribe((s, prev) => {
+      if (s.coords !== prev.coords) updateStatusWidget();
+    });
     return () => {
       sub.remove();
       unsubTrips();
+      unsubLoc();
     };
   }, []);
 
