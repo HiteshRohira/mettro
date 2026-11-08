@@ -54,13 +54,13 @@ Save a route between two stations and it becomes one trip that works in both dir
 
 ```mermaid
 flowchart LR
-    T(["Tap a saved trip:<br/>Home ↔ Office"]) --> Q{"Within 1 km<br/>of either end?"}
-    Q -- "Near Home" --> A["Home → Office"]
-    Q -- "Near Office" --> B["Office → Home"]
+    T(["Tap a saved trip:<br/>Hauz Khas ↔ Delhi Aerocity"]) --> Q{"Within 1 km<br/>of either station?"}
+    Q -- "Near Hauz Khas" --> A["Hauz Khas → Delhi Aerocity"]
+    Q -- "Near Delhi Aerocity" --> B["Delhi Aerocity → Hauz Khas"]
     Q -- "Near neither" --> C["Same way as<br/>last time"]
 ```
 
-- **One trip per pair of stations.** Save Rajiv Chowk → Hauz Khas and it also covers Hauz Khas → Rajiv Chowk. Saving it again tells you it's already saved.
+- **One trip per pair of stations.** Save Hauz Khas → Delhi Aerocity and it also covers Delhi Aerocity → Hauz Khas. Saving it again tells you it's already saved.
 - **Ordered by where you are, then by recency.** Home shows the top three, with the ride time for each; the rest are under *View all*, where you can rename or delete them.
 - **On the widget too (iOS).** The home-screen widget shows the trip you're most likely to take next, and tapping it opens that trip in the right direction.
 
