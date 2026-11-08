@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { Alert, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Card, Empty, Icon, LineChip, Press, SectionHeader, T } from '@/components/ui';
@@ -42,7 +42,7 @@ export default function TripScreen() {
   const minsToDepart = Math.max(0, Math.round((p.departAt - now) / 60000));
 
   const end = () =>
-    Alert.alert('End trip?', 'This stops tracking and removes the Live Activity.', [
+    Alert.alert('End trip?', Platform.OS === 'android' ? 'This stops tracking and removes the trip notification.' : 'This stops tracking and removes the Live Activity.', [
       { text: 'Keep going', style: 'cancel' },
       {
         text: 'End trip',

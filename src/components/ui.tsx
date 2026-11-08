@@ -38,9 +38,62 @@ export function T({ v = 'body', color, dim, faint, style, ...rest }: TextProps &
   return <RNText {...rest} style={[variants[v], { color: color ?? (faint ? c.text3 : dim ? c.text2 : c.text) }, style]} maxFontSizeMultiplier={1.4} />;
 }
 
+const materialIcons: Record<string, NonNullable<Extract<SymbolViewProps['name'], object>['android']>> = {
+  "arrow.right": "arrow_forward",
+  "arrow.up.arrow.down": "swap_vert",
+  "arrow.up.right": "north_east",
+  "clock": "schedule",
+  "location": "near_me",
+  "location.fill": "near_me",
+  "chevron.right": "chevron_right",
+  "chevron.up": "expand_less",
+  "chevron.down": "expand_more",
+  "xmark": "close",
+  "xmark.circle.fill": "cancel",
+  "figure.walk": "directions_walk",
+  "magnifyingglass": "search",
+  "star": "star_outline",
+  "star.fill": "star",
+  "ellipsis.circle": "more_horiz",
+  "phone": "call",
+  "phone.fill": "call",
+  "safari.fill": "open_in_browser",
+  "tram": "tram",
+  "house.fill": "home",
+  "briefcase.fill": "work",
+  "wifi.slash": "wifi_off",
+  "moon.zzz.fill": "bedtime",
+  "sunrise.fill": "wb_twilight",
+  "exclamationmark.triangle.fill": "warning",
+  "exclamationmark.octagon.fill": "error",
+  "arrow.triangle.swap": "swap_horiz",
+  "arrow.triangle.turn.up.right.diamond": "directions",
+  "airplane.departure": "flight_takeoff",
+  "figure.roll": "accessible",
+  "creditcard.fill": "credit_card",
+  "indianrupeesign.circle.fill": "currency_rupee",
+  "arrow.up.arrow.down.square": "elevator",
+  "bag.fill": "shopping_bag",
+  "banknote.fill": "payments",
+  "building.columns.fill": "account_balance",
+  "cross.case.fill": "medical_services",
+  "drop.fill": "water_drop",
+  "figure.and.child.holdinghands": "family_restroom",
+  "fork.knife": "restaurant",
+  "info.circle": "info",
+  "lock.fill": "lock",
+  "shield.fill": "shield",
+  "storefront.fill": "storefront",
+  "ticket.fill": "confirmation_number",
+  "toilet.fill": "wc",
+  "line.3.horizontal.decrease": "filter_list",
+  "line.3.horizontal.decrease.circle.fill": "filter_list",
+  "arrow.up.left.and.arrow.down.right": "zoom_out_map"
+};
+
 export function Icon({ name, size = 18, color, style }: { name: SymbolViewProps['name']; size?: number; color?: string; style?: StyleProp<ViewStyle> }) {
   const { c } = useTheme();
-  return <SymbolView name={name} size={size} tintColor={color ?? c.text} style={[{ width: size, height: size }, style]} resizeMode="scaleAspectFit" />;
+  return <SymbolView name={typeof name === 'string' ? { ios: name, android: materialIcons[name] ?? 'circle' } : name} size={size} tintColor={color ?? c.text} style={[{ width: size, height: size }, style]} resizeMode="scaleAspectFit" />;
 }
 
 export function Card({ style, children, pad = 16, ...rest }: ViewProps & { pad?: number }) {

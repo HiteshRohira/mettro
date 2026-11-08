@@ -1,12 +1,11 @@
 import { router } from 'expo-router';
-import { memo, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Linking, Text as RNText, View } from 'react-native';
-import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { MetroMap, type MetroMapHandle, type Region } from '@/components/metro-map';
 import { Card, Icon, IconButton, LineDots, Press, T } from '@/components/ui';
 import { fmtKm, walkMin } from '@/lib/format';
-import { MAP_EDGES } from '@/lib/mapGeometry';
 import { getStation, haversineKm, LINES, lineById, lineLabel, STATIONS, stationColors, type Station } from '@/lib/network';
 import { locate, useNearest } from '@/lib/useLocation';
 import { usePlanner } from '@/store/planner';
@@ -14,91 +13,10 @@ import { radius, useTheme } from '@/theme';
 
 const DELHI: Region = { latitude: 28.6139, longitude: 77.209, latitudeDelta: 0.38, longitudeDelta: 0.38 };
 
-const Lines = memo(function Lines({ hidden }: { hidden: Set<string> }) {
-  return (
-    <>
-      {MAP_EDGES.filter((e) => !hidden.has(e.line)).map((e) => (
-        <Polyline
-          key={e.key}
-          coordinates={e.coordinates}
-          strokeColor={lineById.get(e.line)!.color}
-          strokeWidth={4}
-          lineCap="round"
-        />
-      ))}
-    </>
-  );
-});
-
-const Stations = memo(function Stations({ onSelect, hidden }: { onSelect: (s: Station) => void; hidden: Set<string> }) {
-  return (
-    <>
-      {STATIONS.filter((s) => s.lines.some((l) => !hidden.has(l))).map((s) => (
-        <Marker
-          key={s.code}
-          coordinate={{ latitude: s.lat, longitude: s.lng }}
-          tracksViewChanges={false}
-          anchor={{ x: 0.5, y: 0.5 }}
-          centerOffset={{ x: 0, y: 0 }}
-          zIndex={2}
-          onPress={() => onSelect(s)}>
-          {/* Preserve the 16pt native frame: flattening this wrapper offsets the
-              inner dot relative to MapKit's annotation coordinate. */}
-          <View collapsable={false} style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
-            <View style={{ width: s.interchange ? 12 : 9, height: s.interchange ? 12 : 9, borderRadius: 6,
-              backgroundColor: '#FFFFFF', borderWidth: s.interchange ? 2.5 : 2,
-              borderColor: s.interchange ? '#111111' : lineById.get(s.lines[0])!.color }} />
-          </View>
-        </Marker>
-      ))}
-    </>
-  );
-});
-
-// Names are separate, non-interactive markers under the dots. The view is square and
-// centred on the station because iOS sizes custom annotation frames square: a wide,
-// short view would be drawn off-centre and drag the dot off its line.
-const LABEL_BOX = 132;
-const Labels = memo(function Labels({ codes, dark }: { codes: Set<string>; dark: boolean }) {
-  return (
-    <>
-      {[...codes].map((code) => {
-        const s = getStation(code);
-        return (
-          <Marker
-            key={code}
-            coordinate={{ latitude: s.lat, longitude: s.lng }}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={false}
-            tappable={false}
-            zIndex={1}>
-            <View pointerEvents="none" style={{ width: LABEL_BOX, height: LABEL_BOX, alignItems: 'center' }}>
-              <RNText
-                numberOfLines={1}
-                style={{
-                  marginTop: LABEL_BOX / 2 + 8,
-                  maxWidth: LABEL_BOX,
-                  fontFamily: 'Inter-SemiBold',
-                  fontSize: 11,
-                  color: dark ? '#F3F4F6' : '#0E1116',
-                  textShadowColor: dark ? '#0A0C10' : '#FFFFFF',
-                  textShadowRadius: 3,
-                  textShadowOffset: { width: 0, height: 0 },
-                }}>
-                {s.name}
-              </RNText>
-            </View>
-          </Marker>
-        );
-      })}
-    </>
-  );
-});
-
 export default function MapScreen() {
   const { c, dark } = useTheme();
   const insets = useSafeAreaInsets();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MetroMapHandle>(null);
   const [sel, setSel] = useState<Station | null>(null);
   // Lines the user picked. Empty = the whole network.
   const [only, setOnly] = useState<string[]>([]);
@@ -172,22 +90,16 @@ export default function MapScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <MapView
+      <MetroMap
         ref={mapRef}
-        style={{ flex: 1 }}
         initialRegion={DELHI}
-        showsUserLocation
-        showsCompass={false}
-        showsPointsOfInterests={false}
-        userInterfaceStyle={dark ? 'dark' : 'light'}
+        dark={dark}
+        hidden={hidden}
+        labeled={labeled}
+        onSelect={select}
         onRegionChangeComplete={setRegion}
-        onPress={(e) => {
-          if (e.nativeEvent.action !== 'marker-press') setSel(null);
-        }}>
-        <Lines hidden={hidden} />
-        <Stations onSelect={select} hidden={hidden} />
-        <Labels codes={labeled} dark={dark} />
-      </MapView>
+        onPressMap={() => setSel(null)}
+      />
 
       <Press
         accessibilityLabel="Map data copyright OpenStreetMap contributors"

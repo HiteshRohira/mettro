@@ -70,7 +70,7 @@ function LegBlock({ leg, first, last }: { leg: Leg; first: boolean; last: boolea
       <View style={{ flexDirection: 'row' }}>
         <View style={{ width: 52 }} />
         <View style={{ width: 24, alignItems: 'center' }}>
-          <View style={{ width: 3, flex: 1, backgroundColor: line.color, borderRadius: 3, marginVertical: -2 }} />
+          <View style={{ width: 4, flex: 1, backgroundColor: line.color, borderRadius: 2, marginVertical: -2 }} />
         </View>
         <View style={{ flex: 1, paddingLeft: 8, paddingVertical: 16, gap: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -99,9 +99,9 @@ function LegBlock({ leg, first, last }: { leg: Leg; first: boolean; last: boolea
                 <Press
                   key={code}
                   onPress={() => router.push({ pathname: '/station/[code]', params: { code } })}
-                  style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: -26 }}>
+                  style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: -24 }}>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c.surface, borderWidth: 2, borderColor: line.color }} />
-                  <T v="caption" dim style={{ marginLeft: 14, flex: 1 }}>
+                  <T v="caption" dim style={{ marginLeft: 12, flex: 1 }}>
                     {getStation(code).name}
                   </T>
                 </Press>

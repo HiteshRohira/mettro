@@ -1,4 +1,4 @@
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 import { useSettings } from '@/store/settings';
 
 export const palette = {
@@ -54,11 +54,11 @@ export function useTheme() {
 }
 
 export const font = {
-  regular: 'Inter-Regular',
-  medium: 'Inter-Medium',
-  semibold: 'Inter-SemiBold',
-  bold: 'Inter-Bold',
-  heavy: 'Inter-ExtraBold',
+  regular: Platform.OS === 'android' ? 'Inter_400Regular' : 'Inter-Regular',
+  medium: Platform.OS === 'android' ? 'Inter_500Medium' : 'Inter-Medium',
+  semibold: Platform.OS === 'android' ? 'Inter_600SemiBold' : 'Inter-SemiBold',
+  bold: Platform.OS === 'android' ? 'Inter_700Bold' : 'Inter-Bold',
+  heavy: Platform.OS === 'android' ? 'Inter_800ExtraBold' : 'Inter-ExtraBold',
 };
 
 export const radius = { sm: 8, md: 12, lg: 16, xl: 22, pill: 999 };

@@ -14,7 +14,7 @@ import { checkServiceHours } from '@/lib/service';
 import { plannedStart, startTrip } from '@/lib/trip';
 import { useNow } from '@/lib/useNow';
 import { useStatus, isNormal } from '@/store/status';
-import { radius, useTheme } from '@/theme';
+import { font, radius, useTheme } from '@/theme';
 
 function dedupe(list: Journey[]) {
   const seen = new Set<string>();
@@ -240,7 +240,7 @@ function Notice({ icon, text, tone }: { icon: any; text: string; tone: 'warn' | 
   return (
     <View style={{ flexDirection: 'row', gap: 10, backgroundColor: bg, borderRadius: radius.md, padding: 12, marginTop: 16, alignItems: 'flex-start' }}>
       <Icon name={icon} size={16} color={fg} style={{ marginTop: 1 }} />
-      <T v="caption" color={fg} style={{ flex: 1, fontFamily: 'Inter-Medium' }}>
+      <T v="caption" color={fg} style={{ flex: 1, fontFamily: font.medium }}>
         {text}
       </T>
     </View>
