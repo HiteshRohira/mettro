@@ -13,20 +13,19 @@ import { font, radius, useTheme } from '@/theme';
 export default function PickScreen() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { field } = useLocalSearchParams<{ field: 'from' | 'to' | 'home' | 'work' }>();
+  const { field } = useLocalSearchParams<{ field: 'from' | 'to' }>();
   const [q, setQ] = useState('');
   const favourites = useSettings((s) => s.favourites);
   const { list: nearby } = useNearest(3, false);
   const results = useMemo(() => searchStations(q, 60), [q]);
 
   const choose = (code: string, viaLocation = false) => {
-    if (field === 'home' || field === 'work') useSettings.getState().set({ [field]: code });
-    else if (field === 'from') usePlanner.getState().set({ from: code, fromIsLocation: viaLocation });
+    if (field === 'from') usePlanner.getState().set({ from: code, fromIsLocation: viaLocation });
     else usePlanner.getState().set({ to: code });
     router.back();
   };
 
-  const label = field === 'from' ? 'Starting station' : field === 'to' ? 'Destination' : field === 'home' ? 'Home station' : 'Work station';
+  const label = field === 'from' ? 'Starting station' : 'Destination';
   const showSuggestions = !q.trim();
   const near = nearby.filter((n) => n.km < 40);
 
@@ -91,7 +90,6 @@ export default function PickScreen() {
                   </T>
                 </Press>
               ) : null}
-              {near.length && field !== 'from' ? <Group title="Nearby" items={near.map((n) => n.station)} onPick={choose} /> : null}
               {favourites.length ? <Group title="Saved" items={favourites.map(getStation)} onPick={choose} /> : null}
               <T v="micro" faint style={{ marginTop: 16, marginBottom: 4 }}>
                 All stations

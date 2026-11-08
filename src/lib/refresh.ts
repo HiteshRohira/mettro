@@ -1,10 +1,13 @@
 import * as BackgroundTask from 'expo-background-task';
+import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
 
 import { fetchStationCount } from '@/lib/api';
 import { whenHydrated } from '@/lib/hydration';
-import { directionsAt, getStation, lineLabel, STATIONS } from '@/lib/network';
+import { getStation, lineLabel, STATIONS } from '@/lib/network';
+import { rankTrips, tripTitle, type Coords } from '@/lib/savedTrips';
+import { useLoc } from '@/lib/useLocation';
 import { useSettings } from '@/store/settings';
 import { disruptedLines, useStatus } from '@/store/status';
 import StatusWidget from '@/widgets/StatusWidget';
@@ -16,34 +19,42 @@ import StatusWidget from '@/widgets/StatusWidget';
  */
 export const REFRESH_TASK = 'mettro-data-refresh';
 
-/** First/last train summary for the user's home (or first saved) station. */
-export function homeTimingSummary(): { station: string; text: string } {
-  const s = useSettings.getState();
-  const code = s.home ?? s.favourites[0] ?? 'RCK';
-  const st = getStation(code);
-  const dirs = directionsAt(code);
-  const firsts = dirs.map((d) => d.timing.first).filter(Boolean) as string[];
-  const lasts = dirs.map((d) => d.timing.last).filter(Boolean) as string[];
-  firsts.sort();
-  lasts.sort();
-  const f = firsts[0]?.slice(0, 5) ?? st.open;
-  const l = lasts[lasts.length - 1]?.slice(0, 5) ?? st.close;
-  return { station: st.name, text: `First ${f} · Last ${l}` };
+/** Where you are for ranking trips: the app's fix if recent, else the OS's last one (never prompts). */
+async function lastCoords(): Promise<Coords | null> {
+  const { coords: mem, at } = useLoc.getState();
+  if (mem && at && Date.now() - at < 10 * 60e3) return mem;
+  try {
+    if (!(await Location.getForegroundPermissionsAsync()).granted) return null;
+    const p = await Location.getLastKnownPositionAsync({ maxAge: 3 * 3600e3 });
+    // whichever fix is newer
+    if (p && (!mem || !at || p.timestamp > at)) return { lat: p.coords.latitude, lng: p.coords.longitude };
+    return mem ?? null;
+  } catch {
+    return mem ?? null;
+  }
 }
 
-export function updateStatusWidget() {
+/** The trip you're most likely to take next: the top of the Trips list. */
+export async function likelyTrip() {
+  const top = rankTrips(useSettings.getState().trips, await lastCoords())[0];
+  if (!top) return null;
+  return { title: tripTitle(top.trip, top.from), route: `${getStation(top.from).name} → ${getStation(top.to).name}`, id: top.trip.id };
+}
+
+export async function updateStatusWidget() {
   if (Platform.OS !== 'ios') return;
   try {
     const { lines, checkedAt } = useStatus.getState();
     const bad = disruptedLines(lines);
-    const home = homeTimingSummary();
+    const trip = await likelyTrip();
     StatusWidget.updateSnapshot({
       checkedAt: checkedAt ?? 0,
       issues: bad.length,
       headline: bad.length ? `${lineLabel(bad[0])}: ${lines[bad[0].id]}` : '',
       lines: bad.map((l) => ({ n: lineLabel(l).replace(' Line', ''), c: l.color, ok: false, s: lines[l.id] })),
-      first: home.text,
-      station: home.station,
+      trip: trip?.title ?? '',
+      route: trip?.route ?? '',
+      url: trip ? `mettro://go/${encodeURIComponent(trip.id)}` : 'mettro://',
     });
   } catch (e) {
     console.warn('widget', e);
@@ -56,7 +67,7 @@ let stationCountCheckedAt = 0;
 export async function refreshData() {
   await whenHydrated();
   const ok = await useStatus.getState().refresh();
-  updateStatusWidget();
+  await updateStatusWidget();
   if (ok && Date.now() - stationCountCheckedAt > 24 * 3600e3) {
     try {
       const count = await fetchStationCount();

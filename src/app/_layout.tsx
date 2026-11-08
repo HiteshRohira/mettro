@@ -8,10 +8,14 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { refreshData, registerRefreshTask, updateStatusWidget } from '@/lib/refresh';
 import { whenHydrated } from '@/lib/hydration';
 import { resumeTracking, tick } from '@/lib/trip';
+import { useLoc } from '@/lib/useLocation';
 import { useSettings } from '@/store/settings';
 import { font, useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Deep links (e.g. from the widget) open on top of the tabs, so Back always leads Home.
+export const unstable_settings = { anchor: '(tabs)' };
 
 export default function RootLayout() {
   const { c, dark } = useTheme();
@@ -29,7 +33,7 @@ export default function RootLayout() {
       // trip first: resuming underground with a weak signal must not wait on network calls
       if (first) await resumeTracking().catch(() => {});
       await tick().catch(() => {});
-      updateStatusWidget();
+      await updateStatusWidget();
       await refreshData().catch(() => {});
       if (first) await registerRefreshTask();
     };
@@ -37,8 +41,18 @@ export default function RootLayout() {
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') boot(false);
     });
+    // keep the widget's "likely trip" in step with saving, renaming and taking trips
+    const unsubTrips = useSettings.subscribe((s, prev) => {
+      if (s.trips !== prev.trips) updateStatusWidget();
+    });
+    // and with where you are: the most likely trip depends on which station you're near
+    const unsubLoc = useLoc.subscribe((s, prev) => {
+      if (s.coords !== prev.coords) updateStatusWidget();
+    });
     return () => {
       sub.remove();
+      unsubTrips();
+      unsubLoc();
     };
   }, []);
 
@@ -69,6 +83,9 @@ export default function RootLayout() {
           <Stack.Screen name="line/[id]" options={{ title: '' }} />
           <Stack.Screen name="journey" options={{ title: 'Routes' }} />
           <Stack.Screen name="trip" options={{ title: 'Your trip' }} />
+          <Stack.Screen name="trips" options={{ title: 'Trips' }} />
+          <Stack.Screen name="go/[id]" options={{ title: '', animation: 'none' }} />
+          <Stack.Screen name="rename-trip/[id]" options={{ title: 'Rename trip', presentation: 'modal' }} />
           <Stack.Screen name="pick" options={{ presentation: 'modal', title: 'Choose station', headerShown: false }} />
           <Stack.Screen name="info/[topic]" options={{ title: '' }} />
         </Stack>

@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { openTrip, SavedTripRow, tripMenu } from '@/components/saved-trips';
 import { ServiceAlerts } from '@/components/status';
 import { TripBanner } from '@/components/trip-banner';
 import { Button, Card, Divider, Icon, LineDots, Press, SectionHeader, T } from '@/components/ui';
 import { fmtClock, hm, walkMin } from '@/lib/format';
 import { directionsAt, getStation, stationColors, titleTowards } from '@/lib/network';
+import { rankTrips } from '@/lib/savedTrips';
 import { useNearest } from '@/lib/useLocation';
 import { serviceMinutes, timetableMinutes } from '@/lib/time';
 import { useNow } from '@/lib/useNow';
@@ -21,9 +23,10 @@ export default function PlanScreen() {
   const { c, scheme } = useTheme();
   const insets = useSafeAreaInsets();
   const { from, to, when, fromIsLocation, set, swap } = usePlanner();
-  const { home, work, recents, favourites } = useSettings();
+  const { trips, favourites } = useSettings();
   const refreshStatus = useStatus((s) => s.refresh);
-  const { list: nearby, status: locStatus, refresh: refreshLoc } = useNearest(3, false);
+  const { list: nearby, coords, status: locStatus, refresh: refreshLoc } = useNearest(3, false);
+  const ranked = useMemo(() => rankTrips(trips, coords), [trips, coords]);
   const [refreshing, setRefreshing] = useState(false);
   const [showTime, setShowTime] = useState(false);
   const now = useNow(60000);
@@ -38,7 +41,6 @@ export default function PlanScreen() {
 
   const go = (f = from, t = to) => {
     if (!f || !t || f === t) return;
-    useSettings.getState().addRecent(f, t);
     router.push({ pathname: '/journey', params: { from: f, to: t, at: when ? String(when) : '' } });
   };
 
@@ -47,11 +49,6 @@ export default function PlanScreen() {
     await Promise.all([refreshStatus(), refreshLoc()]);
     setRefreshing(false);
   };
-
-  const shortcuts = [
-    home ? { key: 'home', icon: 'house.fill' as const, title: 'Home', code: home } : null,
-    work ? { key: 'work', icon: 'briefcase.fill' as const, title: 'Work', code: work } : null,
-  ].filter((x) => !!x && x.code !== from);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top }}>
@@ -129,62 +126,38 @@ export default function PlanScreen() {
           />
         </Card>
 
-        {shortcuts.length ? (
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-            {shortcuts.map((s) => (
-              <Press
-                key={s!.key}
-                onPress={() => {
-                  if (from) go(from, s!.code);
-                  else set({ to: s!.code });
-                }}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
-                  minHeight: 44,
-                  paddingHorizontal: 14,
-                  borderRadius: radius.pill,
-                  backgroundColor: c.surface,
-                  borderWidth: 0.5,
-                  borderColor: c.border,
-                }}>
-                <Icon name={s!.icon} size={12} color={c.text2} />
-                <T v="label">{s!.title}</T>
-              </Press>
+        <SectionHeader
+          title="Trips"
+          action={trips.length > 3 ? 'View all' : undefined}
+          onAction={() => router.push('/trips')}
+        />
+        {ranked.length ? (
+          <Card pad={0} style={{ paddingHorizontal: 14 }}>
+            {ranked.slice(0, 3).map((r, i) => (
+              <View key={r.trip.id}>
+                {i > 0 ? <Divider /> : null}
+                <SavedTripRow
+                  trip={r.trip}
+                  from={r.from}
+                  near={r.near}
+                  onPress={() => openTrip(r.trip, coords)}
+                  onLongPress={() => tripMenu(r.trip, r.from)}
+                  longPressLabel="Rename or delete"
+                />
+              </View>
             ))}
-          </View>
-        ) : null}
-
-        {recents.length ? (
-          <>
-            <SectionHeader title="Recent" action="Clear" onAction={() => useSettings.getState().set({ recents: [] })} />
-            <View style={{ paddingHorizontal: 4 }}>
-              {recents.slice(0, 3).map((r, i) => (
-                <View key={r.from + r.to}>
-                  {i > 0 ? <Divider /> : null}
-                  <Press onPress={() => go(r.from, r.to)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 12 }}>
-                    <Icon name="arrow.up.right" size={16} color={c.text3} />
-                    <View style={{ flex: 1, gap: 3 }}>
-                      <T v="bodyStrong" numberOfLines={2}>
-                        {getStation(r.to).name}
-                      </T>
-                      <T v="caption" dim numberOfLines={1}>
-                        From {getStation(r.from).name}
-                      </T>
-                    </View>
-                  </Press>
-                </View>
-              ))}
-            </View>
-          </>
-        ) : null}
+          </Card>
+        ) : (
+          <T v="caption" dim style={{ paddingHorizontal: 4 }}>
+            Save a route to get here in one tap.
+          </T>
+        )}
 
         <NearbySection nearby={nearby} locStatus={locStatus} onEnable={refreshLoc} now={now} />
 
         {favourites.length ? (
           <>
-            <SectionHeader title="Saved" />
+            <SectionHeader title="Saved stations" />
             <View style={{ paddingHorizontal: 4 }}>
               {favourites.map((code, i) => (
                 <View key={code}>

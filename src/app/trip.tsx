@@ -190,7 +190,7 @@ export default function TripScreen() {
             }}
           />
         ) : (
-          <Button title="End trip" kind="secondary" onPress={end} />
+          <Button title="End trip" onPress={end} />
         )}
       </View>
     </View>

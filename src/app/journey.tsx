@@ -4,15 +4,17 @@ import { ActivityIndicator, Alert, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { JourneyLegs } from '@/components/journey-view';
-import { Button, Card, Icon, Press, T } from '@/components/ui';
+import { Button, Card, Icon, IconButton, Press, T } from '@/components/ui';
 import { NoServiceError, planOnline } from '@/lib/api';
 import { fareFor } from '@/lib/fare';
 import { fmtClock, fmtDuration, hm } from '@/lib/format';
 import { getLine, getStation, lineLabel, stationByCode } from '@/lib/network';
 import { planOffline, type Journey } from '@/lib/router';
+import { pairId, tripTitle } from '@/lib/savedTrips';
 import { checkServiceHours } from '@/lib/service';
 import { plannedStart, startTrip } from '@/lib/trip';
 import { useNow } from '@/lib/useNow';
+import { useSettings } from '@/store/settings';
 import { useStatus, isNormal } from '@/store/status';
 import { font, radius, useTheme } from '@/theme';
 
@@ -62,6 +64,20 @@ function JourneyView({ from, to, at }: { from: string; to: string; at?: string }
   const options = !loading && online?.list ? online.list : offlineOptions;
   const [starting, setStarting] = useState(false);
   const lineStatus = useStatus((s) => s.lines);
+  const saved = useSettings((s) => s.trips.find((t) => t.id === pairId(from, to)));
+
+  // Opening a saved pair counts as taking it: it moves up the list and remembers this direction.
+  useEffect(() => {
+    useSettings.getState().touchTrip(from, to);
+  }, [from, to]);
+
+  const onSave = () => {
+    if (saved) {
+      Alert.alert('Already saved', `${tripTitle(saved, from)} is in your trips.`);
+      return;
+    }
+    useSettings.getState().saveTrip(from, to);
+  };
 
   useEffect(() => {
     let alive = true;
@@ -120,7 +136,21 @@ function JourneyView({ from, to, at }: { from: string; to: string; at?: string }
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: '' }} />
+      <Stack.Screen
+        options={{
+          title: '',
+          headerRight: () => (
+            <IconButton
+              onPress={onSave}
+              accessibilityLabel={saved ? 'Trip saved' : 'Save trip'}
+              accessibilityState={{ selected: !!saved }}
+              icon={saved ? 'bookmark.fill' : 'bookmark'}
+              size={22}
+              color={saved ? c.accent : c.text}
+            />
+          ),
+        }}
+      />
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 110 }}>
         {!j ? (
           loading ? (

@@ -167,21 +167,6 @@ export default function StationScreen() {
       ),
     });
 
-  const more = () => {
-    const actions = [
-      { text: 'Set as Home', onPress: () => useSettings.getState().set({ home: code }) },
-      { text: 'Set as Work', onPress: () => useSettings.getState().set({ work: code }) },
-      { text: 'Navigate to', onPress: navigate },
-    ];
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions({ options: [...actions.map((a) => a.text), 'Cancel'], cancelButtonIndex: 3, title: s.name }, (i) => {
-        actions[i]?.onPress();
-      });
-    } else {
-      Alert.alert(s.name, undefined, actions);
-    }
-  };
-
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <Stack.Screen
@@ -191,7 +176,6 @@ export default function StationScreen() {
             <View style={{ flexDirection: 'row', gap: 4 }}>
               <IconButton onPress={() => useSettings.getState().toggleFav(code)} accessibilityLabel={fav ? 'Remove from saved' : 'Save station'}
                 accessibilityState={{ selected: fav }} icon={fav ? 'star.fill' : 'star'} size={24} color={fav ? '#F5B301' : c.text} />
-              <IconButton onPress={more} accessibilityLabel="More" icon="ellipsis.circle" size={24} />
             </View>
           ),
         }}
