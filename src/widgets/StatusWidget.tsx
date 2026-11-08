@@ -1,5 +1,5 @@
 import { Circle, HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
-import { containerBackground, font, foregroundStyle, frame, lineLimit } from '@expo/ui/swift-ui/modifiers';
+import { containerBackground, font, foregroundStyle, frame, lineLimit, widgetURL } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 // Imported so the build-time layout registry also embeds the Live Activity layout
@@ -11,11 +11,12 @@ export type StatusWidgetProps = {
   issues: number;
   headline: string; // first disruption, e.g. "Blue Line: Delayed"; empty when all normal
   lines: { n: string; c: string; ok: boolean; s?: string }[]; // disrupted lines only
-  first: string; // "First 05:30 · Last 23:12"
-  station: string; // home/nearest station
+  trip: string; // most likely saved trip, e.g. "Office"; empty when none saved
+  route: string; // "Rajiv Chowk → Noida Sector 18"
+  url: string; // opens that trip, oriented by where you are when you tap
 };
 
-// Quiet by default: with normal service the widget is just your station's first/last trains.
+// Quiet by default: with normal service the widget is just your most likely trip.
 // Line status appears only when something is actually wrong.
 const MetroStatusWidget = (p: StatusWidgetProps, env: WidgetEnvironment) => {
   'widget';
@@ -26,16 +27,19 @@ const MetroStatusWidget = (p: StatusWidgetProps, env: WidgetEnvironment) => {
   const red = dark ? '#FF6B5E' : '#D92D20';
   const bad = p.issues > 0;
   const issueText = p.issues + ' line issue' + (p.issues > 1 ? 's' : '');
+  const title = p.trip || 'Mettro';
+  const sub = p.trip ? p.route : 'Save a trip to see it here';
+  const link = widgetURL(p.url || 'mettro://');
 
   if (env.widgetFamily === 'accessoryRectangular') {
     return (
-      <VStack alignment="leading" spacing={2} modifiers={[containerBackground('#00000000', 'widget')]}>
+      <VStack alignment="leading" spacing={2} modifiers={[containerBackground('#00000000', 'widget'), link]}>
         <HStack spacing={4}>
           <Image systemName={bad ? 'exclamationmark.triangle.fill' : 'tram.fill'} size={12} />
-          <Text modifiers={[font({ size: 13, weight: 'bold' }), lineLimit(1)]}>{bad ? issueText : p.station}</Text>
+          <Text modifiers={[font({ size: 13, weight: 'bold' }), lineLimit(1)]}>{bad ? issueText : title}</Text>
         </HStack>
         {bad ? <Text modifiers={[font({ size: 12 }), lineLimit(1)]}>{p.headline}</Text> : null}
-        <Text modifiers={[font({ size: 12 }), lineLimit(1)]}>{p.first}</Text>
+        <Text modifiers={[font({ size: 12 }), lineLimit(1)]}>{sub}</Text>
       </VStack>
     );
   }
@@ -48,27 +52,27 @@ const MetroStatusWidget = (p: StatusWidgetProps, env: WidgetEnvironment) => {
     </HStack>
   ) : null;
 
-  const station = (
+  const tripBlock = (
     <VStack alignment="leading" spacing={2}>
-      <Text modifiers={[font({ size: 14, weight: 'semibold' }), foregroundStyle(fg), lineLimit(2)]}>{p.station}</Text>
-      <Text modifiers={[font({ size: 12 }), foregroundStyle(fg2), lineLimit(1)]}>{p.first}</Text>
+      <Text modifiers={[font({ size: 14, weight: 'semibold' }), foregroundStyle(fg), lineLimit(2)]}>{title}</Text>
+      <Text modifiers={[font({ size: 12 }), foregroundStyle(fg2), lineLimit(2)]}>{sub}</Text>
     </VStack>
   );
 
   if (env.widgetFamily === 'systemSmall') {
     return (
-      <VStack alignment="leading" spacing={6} modifiers={[containerBackground(bg, 'widget')]}>
+      <VStack alignment="leading" spacing={6} modifiers={[containerBackground(bg, 'widget'), link]}>
         <Image systemName="tram.fill" color={fg2} size={14} />
         {alert}
         {bad ? <Text modifiers={[font({ size: 12 }), foregroundStyle(fg2), lineLimit(2)]}>{p.headline}</Text> : null}
         <Spacer />
-        {station}
+        {tripBlock}
       </VStack>
     );
   }
 
   return (
-    <VStack alignment="leading" spacing={6} modifiers={[containerBackground(bg, 'widget')]}>
+    <VStack alignment="leading" spacing={6} modifiers={[containerBackground(bg, 'widget'), link]}>
       <HStack>
         <Image systemName="tram.fill" color={fg2} size={14} />
         <Spacer />
@@ -85,7 +89,7 @@ const MetroStatusWidget = (p: StatusWidgetProps, env: WidgetEnvironment) => {
           ))
         : null}
       <Spacer />
-      {station}
+      {tripBlock}
     </VStack>
   );
 };
@@ -95,6 +99,7 @@ export default createWidget<StatusWidgetProps>('MetroStatusWidget', MetroStatusW
   issues: 0,
   headline: '',
   lines: [],
-  first: '',
-  station: 'Delhi Metro',
+  trip: '',
+  route: '',
+  url: 'mettro://',
 });

@@ -2,21 +2,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-export type Appearance = 'system' | 'light' | 'dark';
+import { pairId, type SavedTrip } from '@/lib/savedTrips';
 
-type Recent = { from: string; to: string; at: number };
+export type Appearance = 'system' | 'light' | 'dark';
 
 type SettingsState = {
   appearance: Appearance;
   liveActivities: boolean;
-  home: string | null;
-  work: string | null;
   favourites: string[];
-  recents: Recent[];
+  trips: SavedTrip[];
   onboarded: boolean;
-  set: (p: Partial<Omit<SettingsState, 'set' | 'toggleFav' | 'addRecent'>>) => void;
+  set: (p: Partial<Pick<SettingsState, 'appearance' | 'liveActivities' | 'favourites' | 'onboarded'>>) => void;
   toggleFav: (code: string) => void;
-  addRecent: (from: string, to: string) => void;
+  /** Saves the pair; returns false if a trip between these stations already exists. */
+  saveTrip: (from: string, to: string, title?: string | null) => boolean;
+  renameTrip: (id: string, title: string) => void;
+  deleteTrip: (id: string) => void;
+  /** Records a trip taken between a saved pair (recency and last direction). */
+  touchTrip: (from: string, to: string) => void;
 };
 
 export const useSettings = create<SettingsState>()(
@@ -24,21 +27,42 @@ export const useSettings = create<SettingsState>()(
     (set, get) => ({
       appearance: 'system',
       liveActivities: true,
-      home: null,
-      work: null,
       favourites: [],
-      recents: [],
+      trips: [],
       onboarded: false,
       set: (p) => set(p),
       toggleFav: (code) => {
         const f = get().favourites;
         set({ favourites: f.includes(code) ? f.filter((c) => c !== code) : [code, ...f] });
       },
-      addRecent: (from, to) => {
-        const r = get().recents.filter((x) => !(x.from === from && x.to === to));
-        set({ recents: [{ from, to, at: Date.now() }, ...r].slice(0, 8) });
+      saveTrip: (from, to, title = null) => {
+        const id = pairId(from, to);
+        if (from === to || get().trips.some((t) => t.id === id)) return false;
+        set({ trips: [{ id, a: from, b: to, title: title?.trim() || null, lastFrom: from, usedAt: Date.now() }, ...get().trips] });
+        return true;
+      },
+      renameTrip: (id, title) => set({ trips: get().trips.map((t) => (t.id === id ? { ...t, title: title.trim() || null } : t)) }),
+      deleteTrip: (id) => set({ trips: get().trips.filter((t) => t.id !== id) }),
+      touchTrip: (from, to) => {
+        const id = pairId(from, to);
+        if (!get().trips.some((t) => t.id === id)) return;
+        set({ trips: get().trips.map((t) => (t.id === id ? { ...t, lastFrom: from, usedAt: Date.now() } : t)) });
       },
     }),
-    { name: 'mettro-settings', storage: createJSONStorage(() => AsyncStorage), version: 1 },
+    {
+      name: 'mettro-settings',
+      storage: createJSONStorage(() => AsyncStorage),
+      version: 2,
+      // v2: saved trips replace Home/Work and recents (old values are dropped).
+      migrate: (old) => {
+        const s = { ...(old as Record<string, unknown>) };
+        delete s.home;
+        delete s.work;
+        delete s.recents;
+        return { ...s, trips: [] } as unknown as SettingsState;
+      },
+    },
   ),
 );
+
+export const findTrip = (from: string, to: string) => useSettings.getState().trips.find((t) => t.id === pairId(from, to));

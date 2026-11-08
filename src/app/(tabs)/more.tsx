@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, Disclosure, Divider, Press, Row, SectionHeader, T } from '@/components/ui';
 import { TOPICS } from '@/lib/info';
-import { getStation } from '@/lib/network';
 import { BUNDLED_STATION_COUNT } from '@/lib/refresh';
 import { useSettings, type Appearance } from '@/store/settings';
 import { useStatus } from '@/store/status';
@@ -37,21 +36,6 @@ export default function MoreScreen() {
             </T>
           </Card>
         ) : null}
-
-        <SectionHeader title="Your stations" />
-        <Card pad={0} style={{ paddingHorizontal: 14 }}>
-          <SettingRow
-            title="Home"
-            value={s.home ? getStation(s.home).name : 'Set'}
-            onPress={() => router.push({ pathname: '/pick', params: { field: 'home' } })}
-          />
-          <Divider />
-          <SettingRow
-            title="Work"
-            value={s.work ? getStation(s.work).name : 'Set'}
-            onPress={() => router.push({ pathname: '/pick', params: { field: 'work' } })}
-          />
-        </Card>
 
         <SectionHeader title="Preferences" />
         <Card pad={0} style={{ paddingHorizontal: 14 }}>
@@ -102,18 +86,3 @@ export default function MoreScreen() {
   );
 }
 
-function SettingRow({ title, value, onPress }: { title: string; value: string; onPress: () => void }) {
-  const { c } = useTheme();
-  return (
-    <Row
-      title={title}
-      onPress={onPress}
-      chevron
-      right={
-        <T v="body" color={c.text3} numberOfLines={1} style={{ maxWidth: '60%' }}>
-          {value}
-        </T>
-      }
-    />
-  );
-}

@@ -29,7 +29,7 @@ export default function RootLayout() {
       // trip first: resuming underground with a weak signal must not wait on network calls
       if (first) await resumeTracking().catch(() => {});
       await tick().catch(() => {});
-      updateStatusWidget();
+      await updateStatusWidget();
       await refreshData().catch(() => {});
       if (first) await registerRefreshTask();
     };
@@ -37,8 +37,13 @@ export default function RootLayout() {
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') boot(false);
     });
+    // keep the widget's "likely trip" in step with saving, renaming and taking trips
+    const unsubTrips = useSettings.subscribe((s, prev) => {
+      if (s.trips !== prev.trips) updateStatusWidget();
+    });
     return () => {
       sub.remove();
+      unsubTrips();
     };
   }, []);
 
@@ -69,6 +74,8 @@ export default function RootLayout() {
           <Stack.Screen name="line/[id]" options={{ title: '' }} />
           <Stack.Screen name="journey" options={{ title: 'Routes' }} />
           <Stack.Screen name="trip" options={{ title: 'Your trip' }} />
+          <Stack.Screen name="trips" options={{ title: 'Trips' }} />
+          <Stack.Screen name="go/[id]" options={{ title: '', animation: 'none' }} />
           <Stack.Screen name="pick" options={{ presentation: 'modal', title: 'Choose station', headerShown: false }} />
           <Stack.Screen name="info/[topic]" options={{ title: '' }} />
         </Stack>

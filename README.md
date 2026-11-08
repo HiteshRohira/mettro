@@ -2,6 +2,8 @@
 
 A fast, modern metro companion for iOS. It starts with **Delhi Metro** (DMRC, Rapid Metro Gurugram and the Airport Express), and is built so more cities can be added.
 
+**Save a trip once, then take it in one tap.** Mettro works out which way you're going from where you're standing, so you almost never pick stations.
+
 Built with Expo SDK 58, React Native 0.88 and Expo Router. Text is set in Inter.
 
 ## Screenshots
@@ -46,9 +48,26 @@ An Android build is also available.
 
 </details>
 
+## Saved trips
+
+Save a route between two stations and it becomes one trip that works in both directions. Tap it and Mettro fills in **From** and **To** for you:
+
+```mermaid
+flowchart LR
+    T(["Tap a saved trip:<br/>Home ↔ Office"]) --> Q{"Within 1 km<br/>of either end?"}
+    Q -- "Near Home" --> A["Home → Office"]
+    Q -- "Near Office" --> B["Office → Home"]
+    Q -- "Near neither" --> C["Same way as<br/>last time"]
+```
+
+- **One trip per pair of stations.** Save Rajiv Chowk → Hauz Khas and it also covers Hauz Khas → Rajiv Chowk. Saving it again tells you it's already saved.
+- **Ordered by where you are, then by recency.** Home shows the top three, with the ride time for each; the rest are under *View all*, where you can rename or delete them.
+- **On the widget too (iOS).** The home-screen widget shows the trip you're most likely to take next, and tapping it opens that trip in the right direction.
+
 ## Features
 
 - **Journey planner**: live routes, train times, platforms and fares from the official DMRC journey planner, with *fastest* and *fewest changes* options. If DMRC is unreachable, an offline planner takes over.
+- **Saved trips**: save a route once and open it in one tap. Mettro starts it from whichever end you're within 1 km of, or the way you last took it, so you rarely pick stations at all.
 - **Live trip tracking**: stop-by-stop progress that blends GPS with the timetable (useful underground). You can tap any station to correct your position.
 - **Live Activity**: shows the next station, a countdown, your arrival time, where to change trains and when to get off. It appears on the Lock Screen and in the Dynamic Island. On Android, the same information is in a silent, ongoing trip notification that is shown only during a trip.
 - **First & last trains** for every station, in every direction (544 direction timings).
@@ -56,7 +75,7 @@ An Android build is also available.
 - **Station details**: platforms, gates (with live open/closed status), lifts and escalators, toilets, ATMs and other facilities, parking, feeder buses, nearby places, and phone numbers.
 - **Nearby stations** with walking time and the last train from each.
 - **Network map** on Apple Maps (iOS) or MapLibre with OpenStreetMap tiles (Android), with a toggle for each line.
-- **Line status**, live from DMRC and refreshed silently in the background. A home-screen widget shows it too (iOS). Apart from the Android trip notification, Mettro sends no notifications.
+- **Line status**, live from DMRC and refreshed silently in the background. A home-screen widget (iOS) shows it alongside your most likely trip, which it opens on tap. Apart from the Android trip notification, Mettro sends no notifications.
 - Fares, ticket and card info, travel rules, helplines, accessibility and Airport Express info.
 - Light and dark mode.
 

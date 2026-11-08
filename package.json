@@ -55,7 +55,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "postinstall": "patch-package",
-    "test": "tsx --tsconfig tests/tsconfig.json tests/geography.test.ts && TZ=UTC tsx --tsconfig tests/tsconfig.json tests/trip.test.ts && TZ=Asia/Kolkata tsx --tsconfig tests/tsconfig.json tests/trip.test.ts"
+    "test": "tsx --tsconfig tests/tsconfig.json tests/geography.test.ts && tsx --tsconfig tests/tsconfig.json tests/savedTrips.test.ts && TZ=UTC tsx --tsconfig tests/tsconfig.json tests/trip.test.ts && TZ=Asia/Kolkata tsx --tsconfig tests/tsconfig.json tests/trip.test.ts"
   },
   "private": true,
   "expo": {
