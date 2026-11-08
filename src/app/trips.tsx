@@ -1,23 +1,48 @@
 import { Stack } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, ScrollView, TextInput, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { openTrip, SavedTripRow } from '@/components/saved-trips';
-import { Card, Divider, IconButton, Press, T } from '@/components/ui';
-import { getStation } from '@/lib/network';
-import { rankTrips, tripTitle, type SavedTrip } from '@/lib/savedTrips';
+import { openTrip, renameTrip, SavedTripRow } from '@/components/saved-trips';
+import { Button, Card, Divider, Press, T } from '@/components/ui';
+import { rankTrips } from '@/lib/savedTrips';
 import { useNearest } from '@/lib/useLocation';
 import { useSettings } from '@/store/settings';
-import { font, useTheme } from '@/theme';
+import { useTheme } from '@/theme';
 
 export default function TripsScreen() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const trips = useSettings((s) => s.trips);
   const { coords } = useNearest(1, false);
-  const [editing, setEditing] = useState(false);
   const ranked = useMemo(() => rankTrips(trips, coords), [trips, coords]);
+  // null = browsing; a set = select mode (for deleting)
+  const [picked, setPicked] = useState<Set<string> | null>(null);
+  const selecting = picked !== null;
+
+  const toggle = (id: string) =>
+    setPicked((p) => {
+      const n = new Set(p);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  const remove = () => {
+    if (!picked?.size) return;
+    const n = picked.size;
+    Alert.alert(n === 1 ? 'Delete this trip?' : `Delete ${n} trips?`, undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          picked.forEach((id) => useSettings.getState().deleteTrip(id));
+          setPicked(null);
+        },
+      },
+    ]);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -26,67 +51,59 @@ export default function TripsScreen() {
           title: 'Trips',
           headerRight: () =>
             trips.length ? (
-              <Press onPress={() => setEditing((v) => !v)} hitSlop={8} style={{ minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'flex-end' }}>
+              <Press
+                onPress={() => setPicked(selecting ? null : new Set())}
+                hitSlop={8}
+                style={{ minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'flex-end' }}>
                 <T v="bodyStrong" color={c.accent}>
-                  {editing ? 'Done' : 'Edit'}
+                  {selecting ? 'Done' : 'Select'}
                 </T>
               </Press>
             ) : null,
         }}
       />
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 110 }}>
         {ranked.length ? (
-          <Card pad={0} style={{ paddingHorizontal: 14 }}>
-            {ranked.map((r, i) => (
-              <View key={r.trip.id}>
-                {i > 0 ? <Divider /> : null}
-                {editing ? (
-                  <EditRow trip={r.trip} from={r.from} />
-                ) : (
-                  <SavedTripRow trip={r.trip} from={r.from} near={r.near} onPress={() => openTrip(r.trip, coords)} />
-                )}
-              </View>
-            ))}
-          </Card>
+          <>
+            <Card pad={0} style={{ paddingHorizontal: 14 }}>
+              {ranked.map((r, i) => (
+                <View key={r.trip.id}>
+                  {i > 0 ? <Divider /> : null}
+                  <SavedTripRow
+                    trip={r.trip}
+                    from={r.from}
+                    near={r.near}
+                    selected={selecting ? picked.has(r.trip.id) : undefined}
+                    onPress={() => (selecting ? toggle(r.trip.id) : openTrip(r.trip, coords))}
+                    onLongPress={selecting ? undefined : () => renameTrip(r.trip, r.from)}
+                    longPressLabel="Rename"
+                  />
+                </View>
+              ))}
+            </Card>
+            {!selecting ? (
+              <T v="caption" faint style={{ textAlign: 'center', marginTop: 12 }}>
+                Long-press a trip to rename it.
+              </T>
+            ) : null}
+          </>
         ) : (
           <T v="body" dim style={{ textAlign: 'center', marginTop: 40 }}>
             No saved trips yet. Plan a route and tap the bookmark to save it.
           </T>
         )}
       </ScrollView>
-    </View>
-  );
-}
-
-function EditRow({ trip, from }: { trip: SavedTrip; from: string }) {
-  const { c } = useTheme();
-  const [title, setTitle] = useState(trip.title ?? '');
-  const to = from === trip.a ? trip.b : trip.a;
-  const remove = () =>
-    Alert.alert('Delete trip?', tripTitle(trip, from), [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => useSettings.getState().deleteTrip(trip.id) },
-    ]);
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 56, paddingVertical: 8 }}>
-      <View style={{ flex: 1, gap: 2 }}>
-        <TextInput
-          value={title}
-          onChangeText={(v) => {
-            setTitle(v);
-            useSettings.getState().renameTrip(trip.id, v);
-          }}
-          placeholder={tripTitle({ ...trip, title: null }, from)}
-          placeholderTextColor={c.text3}
-          returnKeyType="done"
-          accessibilityLabel="Trip name"
-          style={{ fontFamily: font.semibold, fontSize: 15, color: c.text, paddingVertical: 4 }}
-        />
-        <T v="caption" dim numberOfLines={1}>
-          {getStation(from).name} ↔ {getStation(to).name}
-        </T>
-      </View>
-      <IconButton onPress={remove} accessibilityLabel="Delete trip" icon="trash" size={18} color={c.danger} />
+      {selecting ? (
+        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, paddingBottom: insets.bottom + 10, backgroundColor: c.bg }}>
+          <Button
+            title={picked.size > 1 ? `Delete ${picked.size} trips` : 'Delete'}
+            kind="danger"
+            icon="trash"
+            disabled={!picked.size}
+            onPress={remove}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }

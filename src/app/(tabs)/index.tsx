@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { openTrip, SavedTripRow } from '@/components/saved-trips';
+import { openTrip, SavedTripRow, tripMenu } from '@/components/saved-trips';
 import { ServiceAlerts } from '@/components/status';
 import { TripBanner } from '@/components/trip-banner';
 import { Button, Card, Divider, Icon, LineDots, Press, SectionHeader, T } from '@/components/ui';
@@ -136,7 +136,14 @@ export default function PlanScreen() {
             {ranked.slice(0, 3).map((r, i) => (
               <View key={r.trip.id}>
                 {i > 0 ? <Divider /> : null}
-                <SavedTripRow trip={r.trip} from={r.from} near={r.near} onPress={() => openTrip(r.trip, coords)} />
+                <SavedTripRow
+                  trip={r.trip}
+                  from={r.from}
+                  near={r.near}
+                  onPress={() => openTrip(r.trip, coords)}
+                  onLongPress={() => tripMenu(r.trip, r.from)}
+                  longPressLabel="Rename or delete"
+                />
               </View>
             ))}
           </Card>

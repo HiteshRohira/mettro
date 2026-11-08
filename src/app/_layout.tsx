@@ -85,6 +85,7 @@ export default function RootLayout() {
           <Stack.Screen name="trip" options={{ title: 'Your trip' }} />
           <Stack.Screen name="trips" options={{ title: 'Trips' }} />
           <Stack.Screen name="go/[id]" options={{ title: '', animation: 'none' }} />
+          <Stack.Screen name="rename-trip/[id]" options={{ title: 'Rename trip', presentation: 'modal' }} />
           <Stack.Screen name="pick" options={{ presentation: 'modal', title: 'Choose station', headerShown: false }} />
           <Stack.Screen name="info/[topic]" options={{ title: '' }} />
         </Stack>
