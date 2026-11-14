@@ -36,9 +36,11 @@ export default function TripScreen() {
   const j = trip.journey;
   const leg = j.legs[Math.min(p.legIndex, j.legs.length - 1)];
   const line = getLine(leg.lineId);
-  const minsToNext = Math.max(0, Math.round((p.nextAt - now) / 60000));
   const minsLeft = Math.max(0, Math.round((p.eta - now) / 60000));
   const waiting = p.phase === 'waiting';
+  // on the move between two stops: the marker leaves the station dot and rides the line
+  const moving = !p.atStation && !waiting && p.phase !== 'arrived' && !!p.next;
+  const nextName = getStation(p.next?.code ?? j.to).name;
   const minsToDepart = Math.max(0, Math.round((p.departAt - now) / 60000));
 
   const end = () =>
@@ -65,14 +67,14 @@ export default function TripScreen() {
             </T>
           </View>
           <T v="label" dim>
-            {p.phase === 'arrived' ? 'You’ve arrived' : waiting ? 'Your train' : 'Next stop'}
+            {p.phase === 'arrived' ? 'You’ve arrived' : waiting ? 'Your train' : moving ? 'Next stop' : 'Now at'}
           </T>
           <T v="display" style={{ marginTop: 6 }}>
-            {waiting ? fmtClock(p.departAt) : getStation(p.phase === 'arrived' ? j.to : (p.next?.code ?? j.to)).name}
+            {waiting ? fmtClock(p.departAt) : p.phase === 'arrived' ? getStation(j.to).name : moving ? nextName : getStation(p.current.code).name}
           </T>
           {p.phase !== 'arrived' ? (
             <T v="body" dim style={{ marginTop: 8 }}>
-              {waiting ? `Leaves ${getStation(p.current.code).name} in ${minsToDepart} min` : minsToNext <= 0 ? 'Arriving now' : `In about ${minsToNext} min`}
+              {waiting ? `Leaves ${getStation(p.current.code).name} in ${minsToDepart} min` : moving ? `${p.stopsLeft} ${p.stopsLeft === 1 ? 'stop' : 'stops'} to go` : `Next: ${nextName}`}
             </T>
           ) : null}
           <View style={{ height: 3, borderRadius: 2, marginTop: 24, marginBottom: 20, backgroundColor: c.surface2, overflow: 'hidden' }}>
@@ -97,6 +99,7 @@ export default function TripScreen() {
             if (!showAll && (i < p.idx || i > p.idx + 3)) return null;
             const passed = i < p.idx;
             const here = i === p.idx;
+            const stopped = here && !moving; // the ring sits on the dot only while we're at the station
             const ln = getLine(j.legs[pt.legIndex].lineId);
             const nextPt = !showAll && i === p.idx + 3 ? undefined : p.pts[i + 1];
             const segColor = nextPt ? getLine(j.legs[nextPt.legIndex].lineId).color : ln.color;
@@ -112,7 +115,7 @@ export default function TripScreen() {
                   ])
                 }
                 style={{ flexDirection: 'row', alignItems: 'stretch', minHeight: pt.transfer ? 72 : 48 }}>
-                <View style={{ width: 48, paddingTop: 2 }}>
+                <View style={{ width: 70, paddingTop: 2 }}>
                   <T v="caption" faint={passed} style={{ fontVariant: ['tabular-nums'] }}>
                     {fmtClock(at)}
                   </T>
@@ -120,12 +123,12 @@ export default function TripScreen() {
                 <View style={{ width: 22, alignItems: 'center' }}>
                   <View
                     style={{
-                      width: here ? 16 : pt.transfer || i === p.pts.length - 1 || i === 0 ? 12 : 8,
-                      height: here ? 16 : pt.transfer || i === p.pts.length - 1 || i === 0 ? 12 : 8,
+                      width: stopped ? 16 : pt.transfer || i === p.pts.length - 1 || i === 0 ? 12 : 8,
+                      height: stopped ? 16 : pt.transfer || i === p.pts.length - 1 || i === 0 ? 12 : 8,
                       borderRadius: 8,
-                      marginTop: here ? 0 : 3,
-                      backgroundColor: here ? c.surface : passed ? c.text3 : ln.color,
-                      borderWidth: here ? 4 : 0,
+                      marginTop: stopped ? 0 : 3,
+                      backgroundColor: stopped ? c.surface : passed ? c.text3 : ln.color,
+                      borderWidth: stopped ? 4 : 0,
                       borderColor: ln.color,
                       zIndex: 2,
                     }}
@@ -133,9 +136,26 @@ export default function TripScreen() {
                   {nextPt ? (
                     <View style={{ position: 'absolute', top: 10, bottom: -4, width: 3, borderRadius: 2, backgroundColor: i < p.idx ? c.border : segColor }} />
                   ) : null}
+                  {here && moving && nextPt ? (
+                    // between this stop and the next, roughly as far along as the train is
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: `${Math.round((0.28 + 0.5 * p.hop) * 100)}%`,
+                        marginTop: -4,
+                        width: 14,
+                        height: 14,
+                        borderRadius: 7,
+                        backgroundColor: c.surface,
+                        borderWidth: 4,
+                        borderColor: segColor,
+                        zIndex: 3,
+                      }}
+                    />
+                  ) : null}
                 </View>
                 <View style={{ flex: 1, paddingLeft: 10, paddingBottom: 10 }}>
-                  <T v={here || pt.transfer ? 'bodyStrong' : 'body'} faint={passed} numberOfLines={2}>
+                  <T v={stopped || pt.transfer ? 'bodyStrong' : 'body'} faint={passed} numberOfLines={2}>
                     {getStation(pt.code).name}
                   </T>
                   {pt.transfer ? (
@@ -190,7 +210,7 @@ export default function TripScreen() {
             }}
           />
         ) : (
-          <Button title="End trip" onPress={end} />
+          <Button title="End trip" kind="danger" onPress={end} />
         )}
       </View>
     </View>

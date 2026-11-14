@@ -49,10 +49,10 @@ export default function LineScreen() {
             <T v="micro" faint style={{ flex: 1 }}>
               From
             </T>
-            <T v="micro" faint style={{ width: 54, textAlign: 'right' }}>
+            <T v="micro" faint style={{ width: 76, textAlign: 'right' }}>
               First
             </T>
-            <T v="micro" faint style={{ width: 54, textAlign: 'right' }}>
+            <T v="micro" faint style={{ width: 76, textAlign: 'right' }}>
               Last
             </T>
           </View>
@@ -64,10 +64,10 @@ export default function LineScreen() {
               <T v="body" numberOfLines={1} style={{ flex: 1 }}>
                 {getStation(from).name}
               </T>
-              <T v="mono" dim style={{ width: 54, textAlign: 'right' }}>
+              <T v="mono" dim style={{ width: 76, textAlign: 'right' }}>
                 {hm(t?.first)}
               </T>
-              <T v="mono" style={{ width: 54, textAlign: 'right' }}>
+              <T v="mono" style={{ width: 76, textAlign: 'right' }}>
                 {hm(t?.last)}
               </T>
             </View>

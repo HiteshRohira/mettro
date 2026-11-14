@@ -25,6 +25,7 @@ export function tripNotificationContent(p: TripActivityProps) {
   const subtitle = done ? p.action : `${p.lineName} · towards ${p.towards}`;
   const arrive = p.action.includes(p.etaText) ? '' : `Arrive ${p.etaText}`; // milestone text may already say it
   const body = done ? `Arrived · ${p.etaText}` : [p.action, arrive].filter(Boolean).join(' · ');
+  // no countdown to the next stop: trains aren't run to the second
   const content: Record<string, string | number> = {
     notificationTitle: p.title,
     notificationBody: body,
@@ -34,7 +35,6 @@ export function tripNotificationContent(p: TripActivityProps) {
     notificationColor: p.lineColor,
     notificationProgress: done ? 1 : Math.max(0, Math.min(1, p.progress)),
   };
-  if (!done) content.notificationCountdownTo = p.nextAt;
   return content;
 }
 

@@ -6,6 +6,7 @@ import { useTrip, type Trip } from '@/store/trip';
 import { getStation, linesBetween } from '@/lib/network';
 import { clockToEpoch, istIso, serviceMinutes, timetableMinutes } from '@/lib/time';
 import { fareFor } from '@/lib/fare';
+import { fmtClock, hm } from '@/lib/format';
 import { checkServiceHours } from '@/lib/service';
 import { isNormal } from '@/store/status';
 
@@ -374,6 +375,42 @@ async function gps(fix: { lat: number; lng: number; acc: number; at: number }) {
   await gps(near(Date.now() + 5e3));
   await gps(near(Date.now() + 20e3));
   ok('final-stretch fix undoes timed-out arrival', !T().arrivedAt, [T().arrivedBy, T().anchor]);
+
+  // 3. Got off mid-route and waited for the next train (reported at Sultanpur): steady fixes at
+  //    the platform hold the trip there, however long the wait; it moves on with the next train.
+  const dwell = planOffline('RCK', 'KG', 'fastest')!;
+  const wp = buildTimeline(dwell, t0);
+  setNow(t0);
+  newTrip(dwell, t0);
+  await gps(at(wp[1].code, wp[1].at));
+  const waitEnd = wp[1].at + 8 * 60e3;
+  for (let t = wp[1].at + 5e3; t <= waitEnd; t += 5e3) await gps(at(wp[1].code, t));
+  let dw = computeProgress(T(), Date.now());
+  ok('waiting on a platform holds the stop', dw.idx === 1 && dw.next?.code === wp[2].code, [dw.idx, dw.next?.code]);
+  ok('the wait becomes delay', Math.abs(T().delayMs - 8 * 60e3) < 10e3, T().delayMs);
+  await gps(between(wp[1].code, wp[2].code, 0.5, waitEnd + 60e3));
+  dw = computeProgress(T(), Date.now());
+  ok('moves on with the next train', dw.idx === 1 && dw.eta - wp.at(-1)!.at > 7 * 60e3, [dw.idx, (dw.eta - wp.at(-1)!.at) / 60e3]);
+  const isl = activityProps(T(), dw, Date.now());
+  ok('island shows time left, not a countdown', /^\d+m$/.test(isl.etaShort) && !('nextAt' in isl), isl.etaShort);
+  ok('suspended app shows the arrival clock', activityProps({ ...T(), tracking: 'foreground' }, dw, Date.now()).etaShort + ' ' === isl.etaText.slice(0, -2));
+
+  // 4. At a platform vs on the move: the headline follows where the rider is
+  ok('held at the stop by GPS: at station', computeProgress({ ...T(), anchor: { ...T().anchor!, station: 1 } }, Date.now()).atStation);
+  ok('fresh fix between stops: moving', !dw.atStation && dw.hop > 0.3 && dw.hop < 0.7, [dw.atStation, dw.hop]);
+  ok('moving headline names the next stop', isl.title.startsWith('Next: '), isl.title);
+  setNow(t0);
+  newTrip(dwell, t0);
+  const c1 = computeProgress(T(), wp[1].at + 10e3);
+  const c2 = computeProgress(T(), wp[1].at + 50e3);
+  ok('no GPS: at the stop just after planned arrival', c1.idx === 1 && c1.atStation && c1.hop === 0);
+  ok('no GPS: moving once the dwell is over', c2.idx === 1 && !c2.atStation && c2.hop > 0);
+  ok('at-station headline names the stop', activityProps(T(), c1, wp[1].at + 10e3).title === `At ${getStation(wp[1].code).name}`);
+
+  // 5. 12-hour clocks
+  ok('12h afternoon', fmtClock(IST('2026-11-10T13:56:00')) === '1:56 PM', fmtClock(IST('2026-11-10T13:56:00')));
+  ok('12h midnight and noon', fmtClock(IST('2026-11-10T00:05:00')) === '12:05 AM' && fmtClock(IST('2026-11-10T12:00:00')) === '12:00 PM');
+  ok('12h timetable strings', hm('05:48:01') === '5:48 AM' && hm('24:12:00') === '12:12 AM' && hm('23:59') === '11:59 PM', [hm('05:48:01'), hm('24:12:00')]);
 
   Date.now = realNow;
   console.log(`\n${pass} passed, ${fail} failed`);

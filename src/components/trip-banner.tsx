@@ -33,7 +33,7 @@ export function TripBanner() {
         <View style={{ width: 4, height: 36, borderRadius: 2, backgroundColor: line.color }} />
         <View style={{ flex: 1 }}>
           <T v="bodyStrong" color={fg} numberOfLines={1}>
-            {p.phase === 'arrived' ? `Arrived at ${getStation(trip.journey.to).name}` : `Next: ${p.next ? getStation(p.next.code).name : ''}`}
+            {p.phase === 'arrived' ? `Arrived at ${getStation(trip.journey.to).name}` : p.atStation && p.phase !== 'waiting' ? `At ${getStation(p.current.code).name}` : `Next: ${p.next ? getStation(p.next.code).name : ''}`}
           </T>
           <T v="caption" color={c.text2} numberOfLines={1}>
             {p.phase === 'arrived' ? 'Tap to finish' : `Arrive ${fmtClock(p.eta)} · ${p.action}`}

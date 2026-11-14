@@ -1,4 +1,4 @@
-import { istClock } from '@/lib/time';
+import { clock12, istClock } from '@/lib/time';
 
 export function fmtDuration(totalS: number) {
   const m = Math.max(1, Math.round(totalS / 60));
@@ -8,19 +8,24 @@ export function fmtDuration(totalS: number) {
   return r ? `${h} h ${r} min` : `${h} h`;
 }
 
-const pad = (n: number) => String(n).padStart(2, '0');
+/** Time left, compact: "23m", "1h 5m". An estimate, so never below a minute. */
+export function fmtLeft(ms: number) {
+  const m = Math.max(1, Math.round(ms / 60000));
+  if (m < 60) return `${m}m`;
+  const r = m % 60;
+  return r ? `${Math.floor(m / 60)}h ${r}m` : `${m / 60}h`;
+}
 
 /** Clock time in Delhi (IST), regardless of the phone's timezone. */
 export function fmtClock(ms: number) {
   return istClock(ms);
 }
 
-/** "05:48:01" -> "05:48"; "24:12:00" -> "00:12" */
+/** "05:48:01" -> "5:48 AM"; "24:12:00" -> "12:12 AM" */
 export function hm(s?: string | null) {
   if (!s) return '—';
-  const [h, m] = s.split(':');
-  const hh = Number(h) % 24;
-  return `${pad(hh)}:${m}`;
+  const [h, m] = s.split(':').map(Number);
+  return clock12(h % 24, m || 0);
 }
 
 export function hmToMinutes(s?: string | null) {

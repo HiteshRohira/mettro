@@ -12,7 +12,11 @@ type SettingsState = {
   favourites: string[];
   trips: SavedTrip[];
   onboarded: boolean;
-  set: (p: Partial<Pick<SettingsState, 'appearance' | 'liveActivities' | 'favourites' | 'onboarded'>>) => void;
+  /** Developer options are showing in More (tap the version). */
+  developer: boolean;
+  /** Record raw GPS fixes and engine decisions during trips to a file on the device. */
+  debugLog: boolean;
+  set: (p: Partial<Pick<SettingsState, 'appearance' | 'liveActivities' | 'favourites' | 'onboarded' | 'developer' | 'debugLog'>>) => void;
   toggleFav: (code: string) => void;
   /** Saves the pair; returns false if a trip between these stations already exists. */
   saveTrip: (from: string, to: string, title?: string | null) => boolean;
@@ -30,6 +34,8 @@ export const useSettings = create<SettingsState>()(
       favourites: [],
       trips: [],
       onboarded: false,
+      developer: false,
+      debugLog: false,
       set: (p) => set(p),
       toggleFav: (code) => {
         const f = get().favourites;
