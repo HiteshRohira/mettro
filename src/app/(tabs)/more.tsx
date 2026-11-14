@@ -1,10 +1,12 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { Toggle } from '@/components/platform/toggle';
-import { Platform, ScrollView, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, Disclosure, Divider, Press, Row, SectionHeader, T } from '@/components/ui';
+import { clearLog, logSize, shareLog } from '@/lib/debugLog';
 import { TOPICS } from '@/lib/info';
 import { BUNDLED_STATION_COUNT } from '@/lib/refresh';
 import { useSettings, type Appearance } from '@/store/settings';
@@ -19,6 +21,26 @@ export default function MoreScreen() {
   const insets = useSafeAreaInsets();
   const s = useSettings();
   const liveCount = useStatus((st) => st.networkStationsLive);
+  const [bytes, setBytes] = useState(0);
+  useEffect(() => {
+    if (!s.developer) return;
+    const read = () => setBytes(logSize());
+    read();
+    const t = setInterval(read, 5000);
+    return () => clearInterval(t);
+  }, [s.developer]);
+  const sizeLabel = bytes < 1024 ? 'Empty' : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  // Five quick taps on the version line switch developer options on, silently (no accidental toggles).
+  const taps = useRef({ n: 0, at: 0 });
+  const versionTap = () => {
+    if (s.developer) return;
+    const now = Date.now();
+    taps.current = { n: now - taps.current.at < 1500 ? taps.current.n + 1 : 1, at: now };
+    if (taps.current.n >= 5) {
+      taps.current.n = 0;
+      s.set({ developer: true });
+    }
+  };
   const newStations = liveCount != null && liveCount > BUNDLED_STATION_COUNT; // depots are filtered in fetchStationCount
 
   return (
@@ -78,9 +100,49 @@ export default function MoreScreen() {
           ))}
         </Card>
 
-        <T v="caption" faint style={{ textAlign: 'center', marginTop: 28 }}>
-          Mettro {Constants.expoConfig?.version} · Not affiliated with DMRC
-        </T>
+        {s.developer ? (
+          <>
+            <SectionHeader title="Developer" />
+            <Card pad={0} style={{ paddingHorizontal: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 56 }}>
+                <T v="body" style={{ flex: 1 }}>Trip debug log</T>
+                <Toggle value={s.debugLog} onChange={(v) => s.set({ debugLog: v })} label="Trip debug log" scheme={scheme} />
+              </View>
+              <Divider />
+              <Row
+                title="Share log"
+                subtitle={sizeLabel}
+                chevron
+                onPress={() =>
+                  shareLog()
+                    .then((ok) => (ok ? null : Alert.alert('Nothing logged yet', 'Turn on the trip debug log, then take a trip.')))
+                    .catch(() => {})
+                }
+              />
+              <Divider />
+              <Row
+                title="Clear log"
+                onPress={() =>
+                  Alert.alert('Clear the trip log?', undefined, [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Clear', style: 'destructive', onPress: () => clearLog().then(() => setBytes(0)) },
+                  ])
+                }
+              />
+              <Divider />
+              <Row title="Hide developer options" onPress={() => s.set({ developer: false, debugLog: false })} />
+            </Card>
+            <T v="caption" faint style={{ marginTop: 8, paddingHorizontal: 4 }}>
+              Records every GPS fix (position, accuracy, speed) and how the trip followed it. Stays on this device until you share it.
+            </T>
+          </>
+        ) : null}
+
+        <Press onPress={versionTap} style={{ alignSelf: 'center', marginTop: 28, minHeight: 44, justifyContent: 'center' }}>
+          <T v="caption" faint style={{ textAlign: 'center' }}>
+            Mettro {Constants.expoConfig?.version} · Not affiliated with DMRC
+          </T>
+        </Press>
       </ScrollView>
     </View>
   );

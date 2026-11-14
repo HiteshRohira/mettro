@@ -34,10 +34,16 @@ export function istIso(ms: number) {
   return `${p.y}-${pad(p.mo + 1)}-${pad(p.d)}T${pad(p.h)}:${pad(p.mi)}:00.000`;
 }
 
-/** "HH:MM" in IST. */
-export function istClock(ms: number) {
+/** 12-hour clock: "1:56 PM", or "1:56" when `short` (no room for the suffix). */
+export function clock12(h: number, mi: number, short = false) {
+  const t = `${h % 12 || 12}:${pad(mi)}`;
+  return short ? t : `${t} ${h % 24 < 12 ? 'AM' : 'PM'}`;
+}
+
+/** "1:56 PM" in IST. */
+export function istClock(ms: number, short = false) {
   const p = istParts(ms);
-  return `${pad(p.h)}:${pad(p.mi)}`;
+  return clock12(p.h, p.mi, short);
 }
 
 /** Day of week in IST (0 = Sunday). */

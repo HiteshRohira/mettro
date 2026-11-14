@@ -244,10 +244,10 @@ export default function StationScreen() {
             <>
               <View style={{ flexDirection: 'row', paddingTop: 12, paddingBottom: 2 }}>
                 <View style={{ flex: 1 }} />
-                <T v="micro" faint style={{ width: 54, textAlign: 'right' }}>
+                <T v="micro" faint style={{ width: 76, textAlign: 'right' }}>
                   First
                 </T>
-                <T v="micro" faint style={{ width: 54, textAlign: 'right' }}>
+                <T v="micro" faint style={{ width: 76, textAlign: 'right' }}>
                   Last
                 </T>
               </View>
@@ -268,10 +268,10 @@ export default function StationScreen() {
                           </T>
                         ) : null}
                       </View>
-                      <T v="mono" dim style={{ width: 54, textAlign: 'right' }}>
+                      <T v="mono" dim style={{ width: 76, textAlign: 'right' }}>
                         {hm(dir.timing.first)}
                       </T>
-                      <T v="mono" style={{ width: 54, textAlign: 'right' }}>
+                      <T v="mono" style={{ width: 76, textAlign: 'right' }}>
                         {hm(dir.timing.last)}
                       </T>
                     </View>

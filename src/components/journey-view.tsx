@@ -25,7 +25,7 @@ function StationNode({ code, color, big, time, sub }: { code: string; color: str
   const { c } = useTheme();
   return (
     <Press onPress={() => router.push({ pathname: '/station/[code]', params: { code } })} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44 }}>
-      <View style={{ width: 52, alignItems: 'flex-end', paddingRight: 10 }}>
+      <View style={{ width: 74, alignItems: 'flex-end', paddingRight: 10 }}>
         {time ? (
           <T v="label" style={{ fontVariant: ['tabular-nums'] }}>
             {hm(time)}
@@ -68,7 +68,7 @@ function LegBlock({ leg, first, last }: { leg: Leg; first: boolean; last: boolea
     <View>
       {first ? <StationNode code={leg.stations[0]} color={line.color} big time={leg.depart} /> : null}
       <View style={{ flexDirection: 'row' }}>
-        <View style={{ width: 52 }} />
+        <View style={{ width: 74 }} />
         <View style={{ width: 24, alignItems: 'center' }}>
           <View style={{ width: 4, flex: 1, backgroundColor: line.color, borderRadius: 2, marginVertical: -2 }} />
         </View>
@@ -123,7 +123,7 @@ function TransferBlock({ from, to }: { from: Leg; to: Leg }) {
     <View>
       <StationNode code={code} color={a.color} big time={from.arrive} />
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
-        <View style={{ width: 52 }} />
+        <View style={{ width: 74 }} />
         <View style={{ width: 24, alignItems: 'center', gap: 3 }}>
           {[0, 1, 2].map((i) => (
             <View key={i} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: c.text3 }} />

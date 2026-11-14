@@ -3,6 +3,8 @@ import * as TaskManager from 'expo-task-manager';
 import { AppState, Platform } from 'react-native';
 import { after } from 'expo-widgets';
 
+import { flushLog, logEvent, r5 } from '@/lib/debugLog';
+import { fmtLeft } from '@/lib/format';
 import { whenHydrated } from '@/lib/hydration';
 import { getLine, getStation, haversineKm, lineLabel, onLineColor } from '@/lib/network';
 import { INTERCHANGE_SECONDS, type Journey } from '@/lib/router';
@@ -16,6 +18,12 @@ import TripActivity, { type TripActivityProps } from '@/widgets/TripActivity';
 export const TRIP_LOCATION_TASK = 'mettro-trip-location';
 
 // ---- GPS acceptance ----
+/** How often a fix is fed to the engine, moving or not. */
+const FIX_INTERVAL_MS = 5000;
+/** A fix this recent says whether we're standing at a station or between two. */
+const FRESH_FIX_MS = 20e3;
+/** Without GPS (underground) a train is taken to stand at a stop this long after its planned arrival. */
+const DWELL_MS = 30e3;
 /** Fixes worse than this (typical underground / indoors) are ignored; the timetable fills the gap. */
 const GOOD_FIX_M = 150;
 /** Further than this from the route the fix isn't us on this train (nearby road, parallel line…). */
@@ -107,6 +115,10 @@ export type Progress = {
   phase: TripActivityProps['phase'];
   action: string;
   legIndex: number;
+  /** Standing at `current` (doors open / waiting) rather than on the way to `next`. */
+  atStation: boolean;
+  /** How far along the hop from `current` to `next` (0..1). 0 while at the station. */
+  hop: number;
   /** Several good fixes say we're not on this route (wrong train or direction). */
   offRoute: boolean;
   /** Arrival is only estimated (no GPS at the destination yet). */
@@ -175,7 +187,15 @@ export function computeProgress(trip: Trip, now = Date.now()): Progress {
     if (tr) action = `Change at ${getStation(tr.code).name} for ${lineLabel(getLine(legAfterTransfer(j, pts, pts.indexOf(tr)).lineId))}`;
   }
   if (offRoute && !arrived) action = 'Off route? Check you’re on the right train';
+  // At the platform or on the move? A recent fix knows; otherwise go by the planned stop time.
+  let atStation = arrived || tau <= current.dep + DWELL_MS;
+  const a = trip.anchor;
+  if (!arrived && a && now - a.at <= FRESH_FIX_MS && a.idx === idx) atStation = a.station === idx;
+  if (estimated) atStation = false;
+  const hop = atStation || !next ? 0 : Math.min(1, Math.max(0, (tau - current.dep) / Math.max(1, next.at - current.dep)));
   return {
+    atStation,
+    hop,
     pts,
     idx,
     current,
@@ -228,6 +248,8 @@ export function activityProps(trip: Trip, p: Progress, now = Date.now()): TripAc
     dest: getStation(j.to).name,
     eta: Math.round(p.eta),
     etaText: istClock(p.eta),
+    // minutes left need a running app to stay true; a suspended one shows the arrival clock instead
+    etaShort: milestoneMode(trip) ? istClock(p.eta, true) : fmtLeft(p.eta - now),
     departText: istClock(p.departAt),
     start: Math.round(p.departAt),
     stopsLeft: p.stopsLeft,
@@ -238,9 +260,9 @@ export function activityProps(trip: Trip, p: Progress, now = Date.now()): TripAc
     const nl = j.legs[legIndexAfter];
     return `${lineLabel(getLine(nl.lineId))} → ${nl.towards}${nl.platform ? ' · ' + nl.platform.replace('Platform No.', 'P') : ''}`;
   };
-  if (p.phase === 'arrived') return { ...base, title: `Arrived at ${base.dest}`, next: base.dest, nextAt: Math.round(p.eta), action: p.action };
+  if (p.phase === 'arrived') return { ...base, title: `Arrived at ${base.dest}`, next: base.dest, action: p.action };
   if (p.offRoute)
-    return { ...base, title: 'Off route?', next: base.current, nextAt: Math.round(p.eta), action: 'Check you’re on the right train · open Mettro' };
+    return { ...base, title: 'Off route?', next: base.current, action: 'Check you’re on the right train · open Mettro' };
   const milestones = milestoneMode(trip);
   if (p.phase === 'waiting') {
     let action = p.action;
@@ -250,7 +272,7 @@ export function activityProps(trip: Trip, p: Progress, now = Date.now()): TripAc
       const at = istClock(first.at + trip.delayMs);
       action += first.transfer ? ` · change at ${getStation(first.code).name} ${at}` : ` · get off at ${getStation(first.code).name} ${at}`;
     }
-    return { ...base, title: `Train at ${base.departText}`, next: base.current, nextAt: Math.round(p.departAt), action };
+    return { ...base, title: `Train at ${base.departText}`, next: base.current, action };
   }
   if (milestones) {
     const m = nextMilestone(trip, p, now);
@@ -263,7 +285,7 @@ export function activityProps(trip: Trip, p: Progress, now = Date.now()): TripAc
         phase: 'transfer',
         title: `Change here · train ${istClock(dep)}`,
         next: name,
-        nextAt: Math.round(dep),
+       
         action: changeText(m.pt.legIndex + 1),
       };
     }
@@ -274,7 +296,7 @@ export function activityProps(trip: Trip, p: Progress, now = Date.now()): TripAc
         phase: 'transfer',
         title: `Change at ${name} · ${istClock(at)}`,
         next: name,
-        nextAt: Math.round(at),
+       
         action: changeText(m.pt.legIndex + 1),
       };
     }
@@ -283,16 +305,17 @@ export function activityProps(trip: Trip, p: Progress, now = Date.now()): TripAc
       phase: 'arriving',
       title: `Get off at ${name} · ${istClock(at)}`,
       next: name,
-      nextAt: Math.round(at),
+     
       action: `${m.i - p.idx} stop${m.i - p.idx === 1 ? '' : 's'} · towards ${leg.towards}`,
     };
   }
   const nextName = p.next ? getStation(p.next.code).name : base.dest;
   return {
     ...base,
-    title: p.phase === 'arriving' ? `Next: ${nextName} — get off` : `Next: ${nextName}`,
+    // standing at a stop the rider cares where they are; the next stop matters once the train moves
+    title: p.atStation ? `At ${base.current}` : p.phase === 'arriving' ? `Next: ${nextName} — get off` : `Next: ${nextName}`,
     next: nextName,
-    nextAt: Math.round(p.nextAt),
+   
     action: p.action,
   };
 }
@@ -371,6 +394,7 @@ async function syncActivity(trip: Trip, p: Progress) {
       const key = JSON.stringify({ ...props, progress: Math.round(props.progress * 50) });
       if (key === lastPushed) return; // nothing visible changed
       await inst.update(props, staleDate(trip, p));
+      logEvent('activity', { title: props.title, eta: props.etaShort });
       lastPushed = key;
     } else if (!trip.activityDismissed && p.phase !== 'arrived') {
       const created = TripActivity.start(props, 'mettro://trip', staleDate(trip, p));
@@ -380,6 +404,7 @@ async function syncActivity(trip: Trip, p: Progress) {
       lastPushed = '';
     }
   } catch (e) {
+    logEvent('activity-error', { message: String(e) });
     console.warn('Live Activity error', e);
   }
 }
@@ -423,7 +448,7 @@ async function startLocation(ask: boolean): Promise<LocationMode> {
             accuracy: Location.Accuracy.High,
             // time-based callbacks (no distance filter): each one also refreshes the notification
             distanceInterval: 0,
-            timeInterval: 15000,
+            timeInterval: FIX_INTERVAL_MS,
             foregroundService: {
               notificationTitle: String(initial.notificationTitle ?? 'Trip in progress'),
               notificationBody: String(initial.notificationBody ?? 'Mettro is following your trip'),
@@ -438,9 +463,7 @@ async function startLocation(ask: boolean): Promise<LocationMode> {
           console.warn('trip service', e);
         }
       }
-      fgSub ??= await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 80, timeInterval: 15000 }, (loc) =>
-        onFix({ lat: loc.coords.latitude, lng: loc.coords.longitude, acc: loc.coords.accuracy ?? 999, at: loc.timestamp }),
-      );
+      fgSub ??= await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 0, timeInterval: FIX_INTERVAL_MS }, deliver);
       return 'foreground';
     }
     let bgOk = false;
@@ -453,8 +476,10 @@ async function startLocation(ask: boolean): Promise<LocationMode> {
       if (!started) {
         await Location.startLocationUpdatesAsync(TRIP_LOCATION_TASK, {
           accuracy: Location.Accuracy.High,
-          distanceInterval: 80,
-          timeInterval: 15000,
+          // No distance filter (left unset = kCLDistanceFilterNone): a rider standing on a platform must
+          // keep producing fixes, or the timetable clock carries the trip on without them. Batched
+          // every few seconds instead.
+          deferredUpdatesInterval: FIX_INTERVAL_MS,
           activityType: Location.ActivityType.OtherNavigation,
           pausesUpdatesAutomatically: false,
           showsBackgroundLocationIndicator: true,
@@ -463,15 +488,40 @@ async function startLocation(ask: boolean): Promise<LocationMode> {
       return 'background';
     }
     if (!fgSub) {
-      fgSub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 80, timeInterval: 15000 }, (loc) =>
-        onFix({ lat: loc.coords.latitude, lng: loc.coords.longitude, acc: loc.coords.accuracy ?? 999, at: loc.timestamp }),
-      );
+      fgSub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 0, timeInterval: FIX_INTERVAL_MS }, deliver);
     }
     return 'foreground';
   } catch (e) {
     console.warn('location', e);
     return 'error';
   }
+}
+
+let lastDelivered = 0;
+
+/** Every fix iOS/Android hands us, before any filtering: the raw material for judging GPS quality. */
+function logRaw(loc: Location.LocationObject) {
+  const c = loc.coords;
+  logEvent('raw', {
+    at: Math.round(loc.timestamp),
+    age: Math.round(Date.now() - loc.timestamp),
+    lat: r5(c.latitude),
+    lng: r5(c.longitude),
+    acc: c.accuracy == null ? null : Math.round(c.accuracy),
+    alt: c.altitude == null ? null : Math.round(c.altitude),
+    altAcc: c.altitudeAccuracy == null ? null : Math.round(c.altitudeAccuracy),
+    spd: c.speed == null ? null : Math.round(c.speed * 10) / 10,
+    hdg: c.heading == null ? null : Math.round(c.heading),
+    app: AppState.currentState,
+  });
+}
+
+/** Location callbacks arrive up to once a second; the engine only needs one every few seconds. */
+async function deliver(loc: Location.LocationObject) {
+  logRaw(loc);
+  if (Math.abs(loc.timestamp - lastDelivered) < FIX_INTERVAL_MS - 1000) return;
+  lastDelivered = loc.timestamp;
+  await onFix({ lat: loc.coords.latitude, lng: loc.coords.longitude, acc: loc.coords.accuracy ?? 999, at: loc.timestamp });
 }
 
 async function stopLocation() {
@@ -484,11 +534,13 @@ async function stopLocation() {
 
 if (!TaskManager.isTaskDefined(TRIP_LOCATION_TASK)) {
   TaskManager.defineTask<{ locations: Location.LocationObject[] }>(TRIP_LOCATION_TASK, async ({ data, error }) => {
+    if (error) logEvent('loc-error', { message: String(error.message ?? error) });
     if (error || !data?.locations?.length) return;
     // may run in a fresh JS runtime after the app was killed: wait for persisted state first
     await whenHydrated();
-    const loc = data.locations[data.locations.length - 1];
-    await onFix({ lat: loc.coords.latitude, lng: loc.coords.longitude, acc: loc.coords.accuracy ?? 999, at: loc.timestamp });
+    // a background batch holds several fixes: log them all, act on the newest
+    data.locations.slice(0, -1).forEach(logRaw);
+    await deliver(data.locations[data.locations.length - 1]);
   });
 }
 
@@ -554,6 +606,11 @@ function locate(trip: Trip, pts: TimelinePoint[], fix: Fix): Candidate | null {
   return best;
 }
 
+/** Where a fix landed, for the debug log. */
+function where(pts: TimelinePoint[], c: Candidate) {
+  return { idx: c.idx, stn: c.station == null ? null : pts[c.station].code, seg: pts[c.idx].code, km: Math.round(c.km * 1000) / 1000 };
+}
+
 /** Place a GPS fix on the route and re-time the trip around it. Always ticks. */
 export async function onFix(fix: Fix) {
   const st = useTrip.getState();
@@ -562,6 +619,7 @@ export async function onFix(fix: Fix) {
   const now = Date.now();
   const usable = fix.acc <= GOOD_FIX_M && fix.at >= now - MAX_FIX_AGE_MS && fix.at >= trip.createdAt - 30e3;
   if (!usable) {
+    logEvent('fix', { r: fix.acc > GOOD_FIX_M ? 'poor' : fix.at < now - MAX_FIX_AGE_MS ? 'stale' : 'pre-trip', acc: Math.round(fix.acc) });
     st.patch({ lastFix: fix });
     await tick();
     return;
@@ -570,6 +628,7 @@ export async function onFix(fix: Fix) {
   const last = pts.length - 1;
   const c = locate(trip, pts, fix);
   if (!c) {
+    logEvent('fix', { r: 'off-route', n: trip.offRoute + 1 });
     st.patch({ lastFix: fix, offRoute: trip.offRoute + 1 });
     await tick();
     return;
@@ -586,6 +645,7 @@ export async function onFix(fix: Fix) {
     const pending = trip.backPending;
     const consistent =
       !!pending && c.tau >= pending.tau - BACK_TOLERANCE_MS && c.tau - pending.tau <= Math.max(0, fix.at - pending.at) * MAX_PROGRESS_RATE + 2 * 60e3;
+    logEvent('fix', { r: consistent ? 'ahead-agree' : 'ahead-pending', ...where(pts, c), jump: Math.round((c.tau - prevTau) / 1000) });
     if (!consistent) {
       // start a new candidate position
       st.patch({ lastFix: fix, backPending: { tau: c.tau, idx: c.idx, station: c.station, at: fix.at } });
@@ -603,6 +663,7 @@ export async function onFix(fix: Fix) {
   if (trip.anchor && c.tau < trip.anchor.tau - BACK_TOLERANCE_MS) {
     const pending = trip.backPending;
     if (!pending || Math.abs(pending.tau - c.tau) > 2 * 60e3) {
+      logEvent('fix', { r: 'back-pending', ...where(pts, c), back: Math.round((trip.anchor.tau - c.tau) / 1000) });
       st.patch({ lastFix: fix, backPending: { tau: c.tau, idx: c.idx, station: c.station, at: fix.at } });
       await tick();
       return;
@@ -626,8 +687,35 @@ export async function onFix(fix: Fix) {
     patch.arrivedAt = null;
     patch.arrivedBy = null;
   }
+  logEvent('fix', {
+    r: 'accept',
+    ...where(pts, c),
+    delay: Math.round(patch.delayMs! / 1000),
+    was: Math.round(trip.delayMs / 1000),
+    arrived: patch.arrivedBy ?? undefined,
+  });
   st.patch(patch);
   await tick();
+}
+
+let lastState = '';
+
+/** Log what the rider is being shown, whenever it changes. */
+function logState(trip: Trip, p: Progress, now: number) {
+  const s = {
+    idx: p.idx,
+    cur: p.current.code,
+    next: p.next?.code ?? null,
+    phase: p.phase,
+    at: p.atStation,
+    delay: Math.round(trip.delayMs / 60e3),
+    off: p.offRoute,
+    est: p.estimated,
+  };
+  const key = JSON.stringify(s);
+  if (key === lastState) return;
+  lastState = key;
+  logEvent('state', { ...s, delayS: Math.round(trip.delayMs / 1000), etaIn: Math.round((p.eta - now) / 1000), fixAge: trip.anchor ? Math.round((now - trip.anchor.at) / 1000) : null });
 }
 
 /** Recompute progress, push it to the Live Activity, and manage the trip lifecycle. */
@@ -645,6 +733,7 @@ export async function tick() {
     useTrip.getState().patch({ arrivedAt: now, arrivedBy: 'time' });
     p = computeProgress(useTrip.getState().trip!, now);
   }
+  logState(useTrip.getState().trip!, p, now);
   await syncActivity(useTrip.getState().trip!, p);
   return p;
 }
@@ -688,12 +777,29 @@ export async function startTrip(j: Journey, startAt?: number) {
   useTrip.getState().setTrip(trip);
   const loc = await startLocation(true);
   useTrip.getState().patch({ tracking: loc === 'background' ? 'background' : loc === 'foreground' ? 'foreground' : 'none' });
+  lastState = '';
+  logEvent('trip-start', {
+    os: `${Platform.OS} ${Platform.Version}`,
+    location: loc,
+    from: j.from,
+    to: j.to,
+    planned: !!j.legs[0]?.depart,
+    // the route with coordinates and planned times, so the log can be replayed on its own
+    stops: buildTimeline(j, trip.startedAt).map((pt) => {
+      const s = getStation(pt.code);
+      return { c: pt.code, n: s.name, lat: r5(s.lat), lng: r5(s.lng), at: Math.round(pt.at), dep: Math.round(pt.dep), x: pt.transfer || undefined };
+    }),
+  });
   ensureController();
   await tick();
   return loc;
 }
 
 export async function stopTrip() {
+  if (useTrip.getState().trip) {
+    logEvent('trip-end', { arrivedBy: useTrip.getState().trip!.arrivedBy });
+    flushLog();
+  }
   await stopLocation();
   await endAllActivities();
   useTrip.getState().setTrip(null);
@@ -709,6 +815,7 @@ export async function setPosition(i: number) {
   const tauEst = now - trip.delayMs;
   // at the origin before departure keep the plan; elsewhere we're at that station now
   const tau = i === 0 ? Math.min(tauEst, pts[0].dep) : Math.min(pts[i].dep, Math.max(pts[i].at, tauEst));
+  logEvent('manual', { idx: i, stn: pts[i].code, delay: Math.round((now - tau) / 1000), was: Math.round(trip.delayMs / 1000) });
   useTrip.getState().patch({
     anchor: { tau, idx: i, station: i, at: now },
     backPending: null,

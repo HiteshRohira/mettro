@@ -6,7 +6,6 @@ export type TripActivityProps = {
   towards: string;
   current: string;
   next: string;
-  nextAt: number;
   dest: string;
   eta: number;
   start: number;
@@ -16,6 +15,7 @@ export type TripActivityProps = {
   phase: 'waiting' | 'riding' | 'transfer' | 'arriving' | 'arrived';
   title: string;
   etaText: string;
+  etaShort: string;
   departText: string;
 };
 type Instance = { getId(): string; update(p: TripActivityProps, d?: Date): Promise<void>; end(...a: unknown[]): Promise<void> };

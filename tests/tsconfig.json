@@ -5,6 +5,7 @@
     "paths": {
       "@/widgets/*": ["./stubs/widget.ts"],
       "@/*": ["../src/*"],
+      "expo-file-system": ["./stubs/expo-file-system.ts"],
       "expo-location": ["./stubs/expo-location.ts"],
       "expo-task-manager": ["./stubs/expo-task-manager.ts"],
       "expo-background-task": ["./stubs/empty.ts"],

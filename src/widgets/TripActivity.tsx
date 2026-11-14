@@ -1,14 +1,15 @@
-import { HStack, Image, ProgressView, Spacer, Text, VStack } from '@expo/ui/swift-ui';
+import { HStack, Image, ProgressView, Spacer, Text, VStack, ZStack } from '@expo/ui/swift-ui';
 import {
   activityBackgroundTint,
   background,
+  fixedSize,
   font,
   foregroundStyle,
-  frame,
   labelsHidden,
   lineLimit,
   monospacedDigit,
   padding,
+  progressViewStyle,
   shapes,
   tint,
 } from '@expo/ui/swift-ui/modifiers';
@@ -21,7 +22,6 @@ export type TripActivityProps = {
   towards: string;
   current: string;
   next: string;
-  nextAt: number; // epoch ms
   dest: string;
   eta: number; // epoch ms
   start: number; // epoch ms
@@ -31,6 +31,7 @@ export type TripActivityProps = {
   phase: 'waiting' | 'riding' | 'transfer' | 'arriving' | 'arrived';
   title: string; // headline, composed by the app
   etaText: string; // arrival clock (IST), formatted by the app
+  etaShort: string; // collapsed island: time left ("23m"), or the arrival clock when the app can't keep it fresh
   departText: string; // first departure clock (IST)
 };
 
@@ -40,7 +41,6 @@ const TripActivity = (p: TripActivityProps, env: LiveActivityEnvironment) => {
   const accent = dim ? '#FFFFFF' : p.lineColor;
   const now = Date.now();
   const etaDate = new Date(Math.max(p.eta, now + 1000));
-  const nextDate = new Date(Math.max(p.nextAt, now + 1000));
   const startDate = new Date(Math.min(p.start, now));
   const arrived = p.phase === 'arrived';
   const etaClock = p.etaText;
@@ -52,11 +52,31 @@ const TripActivity = (p: TripActivityProps, env: LiveActivityEnvironment) => {
       modifiers={[
         font({ size: 12, weight: 'bold' }),
         foregroundStyle(dim ? '#000000' : p.lineText),
+        lineLimit(1),
+        fixedSize(),
         padding({ horizontal: 8, vertical: 3 }),
         background(accent, shapes.capsule()),
       ]}>
       {p.lineName}
     </Text>
+  );
+
+  // The system draws the island's outline, so trip progress can't run around the pill itself.
+  // a timed circular ProgressView prints its own countdown in the middle: shrink it away, the icon goes there
+  const ringStyle = [progressViewStyle('circular'), tint(accent), labelsHidden(), font({ size: 1 }), foregroundStyle('#00000000')];
+  const ring = (
+    <ZStack>
+      {arrived ? (
+        <ProgressView value={1} modifiers={ringStyle} />
+      ) : (
+        <ProgressView
+          timerInterval={{ lower: startDate, upper: etaDate }}
+          countsDown={false}
+          modifiers={ringStyle}
+        />
+      )}
+      <Image systemName="tram.fill" color={accent} size={9} />
+    </ZStack>
   );
 
   return {
@@ -72,14 +92,6 @@ const TripActivity = (p: TripActivityProps, env: LiveActivityEnvironment) => {
         </HStack>
         <HStack spacing={6}>
           <Text modifiers={[font({ size: 20, weight: 'bold' }), foregroundStyle('#FFFFFF'), lineLimit(1)]}>{headline}</Text>
-          <Spacer />
-          {arrived ? null : (
-            <Text
-              timerInterval={{ lower: new Date(Math.min(now, p.nextAt - 1000)), upper: nextDate }}
-              countsDown
-              modifiers={[font({ size: 17, weight: 'semibold' }), foregroundStyle(accent), monospacedDigit(), frame({ width: 64, alignment: 'trailing' })]}
-            />
-          )}
         </HStack>
         {arrived ? (
           <ProgressView value={1} modifiers={[tint(accent)]} />
@@ -94,22 +106,14 @@ const TripActivity = (p: TripActivityProps, env: LiveActivityEnvironment) => {
         </HStack>
       </VStack>
     ),
-    compactLeading: (
-      <HStack spacing={4}>
-        <Image systemName="tram.fill" color={accent} size={14} />
-        <Text modifiers={[font({ size: 13, weight: 'semibold' }), lineLimit(1), frame({ maxWidth: 70 })]}>{arrived ? 'Arrived' : p.next}</Text>
-      </HStack>
-    ),
+    // Collapsed: just the train (inside a ring that fills over the trip) and the time left to the destination.
+    compactLeading: ring,
     compactTrailing: arrived ? (
       <Image systemName="checkmark.circle.fill" color={accent} size={14} />
     ) : (
-      <Text
-        timerInterval={{ lower: new Date(Math.min(now, p.nextAt - 1000)), upper: nextDate }}
-        countsDown
-        modifiers={[font({ size: 13, weight: 'semibold' }), foregroundStyle(accent), monospacedDigit(), frame({ width: 44 })]}
-      />
+      <Text modifiers={[font({ size: 13, weight: 'semibold' }), foregroundStyle(accent), monospacedDigit(), lineLimit(1), fixedSize()]}>{p.etaShort}</Text>
     ),
-    minimal: <Image systemName="tram.fill" color={accent} size={14} />,
+    minimal: ring,
     expandedLeading: (
       <VStack alignment="leading" spacing={4} modifiers={[padding({ leading: 4, top: 4 })]}>
         {chip}
@@ -118,13 +122,13 @@ const TripActivity = (p: TripActivityProps, env: LiveActivityEnvironment) => {
     ),
     expandedTrailing: (
       <VStack alignment="trailing" spacing={2} modifiers={[padding({ trailing: 4, top: 4 })]}>
-        <Text modifiers={[font({ size: 11 }), foregroundStyle('#A3A9B5')]}>Arrive</Text>
-        <Text modifiers={[font({ size: 18, weight: 'bold' }), monospacedDigit()]}>{etaClock}</Text>
+        <Text modifiers={[font({ size: 11 }), foregroundStyle('#A3A9B5')]}>{arrived ? 'Arrived' : 'Arrive'}</Text>
+        <Text modifiers={[font({ size: 18, weight: 'bold' }), monospacedDigit(), lineLimit(1), fixedSize()]}>{etaClock}</Text>
       </VStack>
     ),
-    expandedCenter: <Text modifiers={[font({ size: 16, weight: 'bold' }), lineLimit(1)]}>{headline}</Text>,
     expandedBottom: (
       <VStack alignment="leading" spacing={6} modifiers={[padding({ horizontal: 8, bottom: 6 })]}>
+        <Text modifiers={[font({ size: 17, weight: 'bold' }), lineLimit(1)]}>{headline}</Text>
         {arrived ? (
           <ProgressView value={1} modifiers={[tint(accent)]} />
         ) : (
